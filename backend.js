@@ -199,8 +199,12 @@
       showLoginGate();
       return;
     }
+    // Supabase may re-emit SIGNED_IN when the browser tab regains focus.
+    // Only navigate Home when entering the portal from a locked login gate.
+    // A background token/session refresh must preserve the current page.
+    const enteringPortal = document.body.classList.contains('auth-locked');
     setAuthLocked(false);
-    if (typeof show === 'function') show('Home');
+    if (enteringPortal && typeof show === 'function') show('Home');
     applySearchRoleUi();
   }
 
