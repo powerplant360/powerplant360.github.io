@@ -295,6 +295,54 @@ function renderTabs(active='Home'){
  document.getElementById('tabs').innerHTML=visibleTabs.map(x=>`<button type='button' class='${x===active?'active':''}' ${x===active?'aria-current="page"':''} onclick="show('${x}')">${x}</button>`).join('');
 }
 
+// Refresh-only navigation state: a new visit always starts on Home.
+const pp360ReloadKey='pp360:refresh-view';
+const pp360WasReload=performance.getEntriesByType('navigation')[0]?.type==='reload';
+let pp360PendingReload=null;
+try {
+ if(pp360WasReload) pp360PendingReload=JSON.parse(sessionStorage.getItem(pp360ReloadKey)||'null');
+ else sessionStorage.removeItem(pp360ReloadKey);
+} catch (_) { pp360PendingReload=null; }
+const pp360AllowedViews=['Home','Search History','Calculators','DCS Analysis','Mock Interview','Admin'];
+function pp360SaveRefreshView(next){
+ if(document.body.classList.contains('auth-locked') || pp360PendingReload) return;
+ try { sessionStorage.setItem(pp360ReloadKey,JSON.stringify(next)); } catch (_) {}
+}
+function pp360RestoreAfterAuth(){
+ if(!pp360PendingReload || document.body.classList.contains('auth-locked')) return;
+ const saved=pp360PendingReload;
+ pp360PendingReload=null;
+ // Allow Supabase to finish setting the verified member role.
+ setTimeout(()=>{
+   const role=window.pp360BackendRole;
+   if(!window.pp360SignedIn || !role) return;
+   if(saved.tab==='Admin' && role!=='admin') return;
+   if(typeof saved.equipment==='string' && equipment.includes(saved.equipment)){
+     equipmentPage(saved.equipment);
+   } else if(pp360AllowedViews.includes(saved.tab)){
+     show(saved.tab);
+     if(saved.tab==='Calculators' && saved.calculator && typeof window.openEngineeringCalculator==='function'){
+       window.openEngineeringCalculator(saved.calculator);
+     }
+   }
+ },0);
+}
+document.addEventListener('click',event=>{
+ const calc=event.target.closest?.('[data-open-calc]');
+ if(calc && !document.body.classList.contains('auth-locked')){
+   try {
+     const current=JSON.parse(sessionStorage.getItem(pp360ReloadKey)||'{}');
+     const id=calc.getAttribute('data-open-calc');
+     pp360SaveRefreshView({tab:'Calculators',calculator:current.calculator===id?null:id});
+   } catch (_) {}
+ }
+ if(event.target.closest?.('.calc-close-btn')) pp360SaveRefreshView({tab:'Calculators'});
+ if(event.target.closest?.('.header-logout')) {
+   pp360PendingReload=null;
+   try { sessionStorage.removeItem(pp360ReloadKey); } catch (_) {}
+ }
+},true);
+
 function show(x){
  closePP360Nav(false);
  if(x==='Admin' && !(window.pp360SignedIn===true && admin)) x='Home';
@@ -315,9 +363,12 @@ function show(x){
  if(x==='DCS Analysis')v.innerHTML=`<div class='card'><h2>DCS Daily Report Analysis</h2><p>Production version will parse authorized Excel/CSV daily reports, compare parameters against approved limits and detect historical deviations.</p><div class="notice">For safety, the app will not create alarm/trip limits from generic internet values. You will define or upload the approved plant limits.</div><table><tr><th>Parameter</th><th>Reading</th><th>Status</th></tr><tr><td>Main Steam Temp</td><td>Demo</td><td><span class='badge ok'>NORMAL</span></td></tr><tr><td>ID Fan-A Current</td><td>+14% vs 7-day avg</td><td><span class='badge danger'>ATTENTION</span></td></tr></table></div>`;
  if(x==='Mock Interview')v.innerHTML=`<div class='card'><h2>Mock Interview</h2><select id=role><option>Plant Head</option><option>Operations Manager</option><option>Shift Incharge</option><option>Engineer</option><option>Operator</option></select> <select><option>Boiler</option><option>Turbine</option><option>Electrical</option><option>C&I</option><option>CHP/AHS</option><option>WTP/ETP</option></select><p><b>Q:</b> During sudden furnace draft fluctuation in a CFBC boiler, what parameters and equipment would you check first?</p><textarea style='width:100%;min-height:100px' placeholder='Type your answer...'></textarea></div>`;
  if(x==='Admin')adminPage();
+ pp360SaveRefreshView({tab:x});
+ if(x==='Home') pp360RestoreAfterAuth();
 }
 
 function equipmentPage(e){
+ pp360SaveRefreshView({tab:'Home',equipment:e});
  renderTabs();
  const equipmentUpload = admin ? `
    <div class="equipment-uploadbar">
