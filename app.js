@@ -271,7 +271,7 @@ window.pp360RememberSearchAnswer=function(query,payload){
    : [];
  const sources=Array.isArray(payload?.sources)
    ? payload.sources.slice(0,3).filter(x=>/^[a-f0-9-]{36}$/i.test(String(x?.document_id||'')))
-       .map(x=>({document_id:x.document_id,file_name:String(x.file_name||'').slice(0,180),page:Number.isInteger(Number(x.page))&&Number(x.page)>0?Number(x.page):null,evidence_excerpt:String(x.evidence_excerpt||'').slice(0,500)}))
+       .map(x=>({document_id:x.document_id,file_name:String(x.file_name||'').slice(0,180),page:Number.isInteger(Number(x.page))&&Number(x.page)>0?Number(x.page):null,evidence_excerpt:String(x.evidence_excerpt||'').slice(0,500),scope:String(payload.scope||'').slice(0,90)}))
    : [];
  const saved=readAnswerHistory();
  saved[norm(query)]={answer:plain,lines,sources,when:new Date().toISOString()};
@@ -300,7 +300,7 @@ function renderSearchHistory(){
   if(src && /^[a-f0-9-]{36}$/i.test(String(src.document_id||''))){
     const search=history[i]||'';
     const snapshot=readAnswerHistory()[norm(search)];
-    window.viewDocument(src.document_id,src.page||undefined,{query:search,answerLines:Array.isArray(snapshot?.lines)?snapshot.lines:[],evidence_excerpt:String(src.evidence_excerpt||'').slice(0,500)});
+    window.viewDocument(src.document_id,src.page||undefined,{query:search,answerLines:Array.isArray(snapshot?.lines)?snapshot.lines:[],evidence_excerpt:String(src.evidence_excerpt||'').slice(0,500),scope:String(src.scope||'').slice(0,90)});
   }
  }));
 }
