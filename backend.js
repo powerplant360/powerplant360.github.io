@@ -3946,7 +3946,7 @@
       d = data;
     }
 
-    if (/\\.docx$/i.test(String(d.file_name || ''))) {
+    if (/\.docx$/i.test(String(d.file_name || ''))) {
       await previewWordDocument(d);
       return;
     }
