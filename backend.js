@@ -4527,12 +4527,13 @@
       seen.add(id);
       const fileName = String(src?.file_name || '');
       const isSheet = /\.(xlsx|xls|csv)$/i.test(fileName);
+      const isPdf = /\.pdf$/i.test(fileName);
       const page = Number(src?.page);
       const pageEnd = Number(src?.page_end);
       const safePage = Number.isFinite(page) && page > 0 ? Math.floor(page) : null;
       const safeEnd = Number.isFinite(pageEnd) && pageEnd >= page ? Math.floor(pageEnd) : safePage;
-      const pageArg = (!isSheet && safePage) ? ',' + safePage : '';
-      const pageLabel = isSheet
+      const pageArg = (isPdf && safePage) ? ',' + safePage : '';
+      const pageLabel = !isPdf
         ? ''
         : (safePage
             ? (safeEnd && safeEnd > safePage
