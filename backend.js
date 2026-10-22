@@ -3790,6 +3790,28 @@
     return {score:bestScore,matchRow:bestRow};
   }
 
+
+  function pp360MakePreviewDraggable(id,selector){
+    const modal=document.getElementById(id),panel=modal?.querySelector(selector);
+    const header=panel?.querySelector('.spreadsheet-preview-head');
+    if(!header)return;
+    header.style.cursor='grab';header.style.touchAction='none';
+    let origin=null;
+    header.addEventListener('pointerdown',e=>{
+      if(e.button!==0||e.target.closest('button,input,a,select'))return;
+      const r=panel.getBoundingClientRect();
+      panel.style.position='fixed';panel.style.left=r.left+'px';
+      panel.style.top=r.top+'px';panel.style.margin='0';panel.style.transform='none';
+      origin={id:e.pointerId,dx:e.clientX-r.left,dy:e.clientY-r.top};
+      header.setPointerCapture(e.pointerId);e.preventDefault();
+    });
+    header.addEventListener('pointermove',e=>{
+      if(!origin||e.pointerId!==origin.id)return;
+      panel.style.left=Math.max(0,Math.min(innerWidth-panel.offsetWidth,e.clientX-origin.dx))+'px';
+      panel.style.top=Math.max(0,Math.min(innerHeight-panel.offsetHeight,e.clientY-origin.dy))+'px';
+    });
+    for(const type of ['pointerup','pointercancel'])header.addEventListener(type,()=>{origin=null;});
+  }
   function closeSpreadsheetPreview() {
     document.getElementById('spreadsheetPreviewModal')?.remove();
     window.pp360SpreadsheetPreview = null;
@@ -3888,6 +3910,7 @@
         </div>
       </div>`);
 
+    pp360MakePreviewDraggable('spreadsheetPreviewModal','.spreadsheet-modalbox');
     try {
       const { data: blob, error } = await client().storage
         .from('plant-documents')
@@ -4025,6 +4048,7 @@
         '</div>' +
       '</div>');
 
+    pp360MakePreviewDraggable('pdfImagePreviewModal','.pdf-image-modalbox');
     try {
       const { data: blob, error } = await client().storage
         .from('plant-documents')
@@ -4169,6 +4193,7 @@
           <div class="pp360-word-body" id="wordPreviewBody" role="document">Loading document…</div>
         </div>
       </div>`);
+    pp360MakePreviewDraggable('wordPreviewModal','.pp360-word-modal');
     const target = document.getElementById('wordPreviewBody');
     try {
       if (!window.JSZip) throw new Error('Word preview library is unavailable. Refresh and try again.');
@@ -4286,6 +4311,7 @@
       '<span id="pp360UniversalPage"></span>'+
       '<button id="pp360UniversalNext" onclick="pp360UniversalPageStep(1)">Next</button></div>'+
       '<div class="pp360-word-body pp360-universal-body" id="pp360UniversalBody">Loading…</div></div></div>');
+    pp360MakePreviewDraggable('pp360UniversalModal','.pp360-word-modal');
     document.getElementById('pp360UniversalDownload').onclick=()=>downloadOriginalDocument(d.id);
     const body=document.getElementById('pp360UniversalBody');
     const info=document.getElementById('pp360UniversalInfo');
