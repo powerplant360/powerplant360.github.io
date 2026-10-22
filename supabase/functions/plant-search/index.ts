@@ -99,7 +99,27 @@ function splitPages(extracted = "") {
   return out;
 }
 
+// A requested reservoir level must be grounded in a reservoir/tank record and
+// in the requested level. Generic "rated capacity" from another machine is not evidence.
+function reservoirLevelEvidence(question:string, text:string, fileName:string, sourcePath:string) {
+  const q = norm(question);
+  if (!/\b(reservoir|water tank|storage tank)\b/.test(q) ||
+      !/\b(level|mtr|meter|metre|capacity|volume|stock)\b/.test(q)) return true;
+
+  const hay = norm([text, fileName, sourcePath].join(" "));
+  if (!/\b(reservoir|water tank|storage tank|level.volume|level volume|usable stock)\b/.test(hay)) return false;
+
+  // For numeric level queries, do not substitute a different level or equipment rating.
+  const requested = q.match(/\b(\d+(?:\.\d+)?)\s*(?:mtr|meter|metre|meters|metres|m)\b/) ||
+    q.match(/\b(?:level|at)\s*(\d+(?:\.\d+)?)\b/);
+  if (!requested) return true;
+  const level = requested[1].replace(/[.*+?^${}()|[\]\\]/g,"\\function scoreChunk(question: string, text: string, fileName: string, category: string, sourcePath: string) {");
+  const levelPattern = new RegExp("(^|[^0-9.])" + level + "(?![0-9.])");
+  return levelPattern.test(hay);
+}
+
 function scoreChunk(question: string, text: string, fileName: string, category: string, sourcePath: string) {
+  if (!reservoirLevelEvidence(question, text, fileName, sourcePath)) return 0;
   const q = norm(question);
   const ts = expandedSearchTerms(question, category);
   const aliases = queryAliases(question, category);
