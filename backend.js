@@ -4241,6 +4241,31 @@
       }
       if(best)matches.push({i,score:best});
     }
+    // When a source answer spans many lines (trip/permissive lists), locate
+    // its named section heading. Do not invent an exact per-row citation.
+    if(!matches.length){
+      const aliases=[
+        {test:/\bbfp\b|boiler feed pump/i,words:['boiler','feed','pump']},
+        {test:/\bid fan\b|induced draft fan/i,words:['id','fan']},
+        {test:/\bpa fan\b|primary air fan/i,words:['pa','fan']},
+        {test:/\bsa fan\b|secondary air fan/i,words:['sa','fan']},
+        {test:/\bacc\b|air cooled condenser/i,words:['air','cooled','condenser']}
+      ];
+      const key=aliases.find(a=>a.test.test(query));
+      if(key){
+        for(let i=0;i<blocks.length;i++){
+          const line=String(blocks[i]||'');
+          const words=new Set(pp360FocusWords(line));
+          if(!key.words.every(w=>words.has(w)))continue;
+          // Only section labels, not casual references scattered in a table.
+          if(line.length>130||!/[:()]|(?:pump|fan)s?\s*[-–]?\s*\d/i.test(line))continue;
+          const context=blocks.slice(i+1,i+10).join(' ').toLowerCase();
+          if(!/\btrip\b|\binterlock\b|\bstart\b|\bpermissive\b/.test(context))continue;
+          matches.push({i,score:500,section:true});
+          break;
+        }
+      }
+    }
     matches.sort((a,b)=>b.score-a.score||a.i-b.i);
     if(!matches.length)return [];
     const top=matches[0].score;
@@ -4293,7 +4318,9 @@
       ? (indexes.length?(/bearing/i.test(focus.query||'') && /\bshaft\b/i.test(String((focus.answerLines||[])[0]||'')) &&
           indexes.some(i=>/\bshaft\b/i.test(blocks[i]) && !/\bbearing\b/i.test(blocks[i]))
           ? 'Related shaft-vibration passage; bearing limit NOT verified'
-          : indexes.length+' closest text match'+(indexes.length===1?'':'es')+' highlighted'):
+          : (/\bboiler feed pump/i.test(String(blocks[indexes[0]]||''))&&/\bbfp\b/i.test(focus.query||'')
+          ?'BFP section located. Verify each condition against its source row.'
+          :indexes.length+' closest text match'+(indexes.length===1?'':'es')+' highlighted')):
           'Exact supporting passage could not be located. Try Find or inspect the document.')
       :'';
     if(focusNode){
@@ -4654,6 +4681,19 @@
         .split(/\n+/)
         .map(x => x.replace(/\(\s*\)/g,'').replace(/\s+/g,' ').trim())
         .filter(Boolean);
+    }
+
+    // Multi-condition plant answers are lists, not one continuous paragraph.
+    // Preserve the source wording and order; only split explicit delimiters.
+    if(!isWeb){
+      cleanedLines=cleanedLines.flatMap(line=>{
+        const split=line.split(/\s*;\s*/).map(part=>part.trim()).filter(Boolean);
+        if(split.length<2)return [line];
+        const label=line.match(/^([^:]{3,85}):\s*/);
+        if(!label)return split;
+        const first=split[0].slice(label[0].length).trim();
+        return [label[1]+':',first,...split.slice(1)].filter(Boolean);
+      });
     }
 
     const onlineLine = cleanedLines.join(' ').trim();
