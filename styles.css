@@ -1967,3 +1967,34 @@ body.dark .public-about-highlights strong,body.dark .public-byline{color:#86d0fa
   .public-process-grid article{padding:19px}
   body.dark .public-nav{border-color:#29445b}
 }
+
+/* Auth restore: never flash the public site or sign-in form during a valid session check. */
+body.auth-locked.auth-checking .public-site{display:none!important}
+body.auth-locked.auth-checking .auth-gate{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px;background:#0e1a28}
+body.auth-locked.auth-checking .auth-card{display:block;width:min(430px,100%);text-align:center}
+body.auth-locked.auth-checking .auth-close{display:none}
+body.auth-locked.auth-checking .auth-loading{font-weight:650;color:#b7d4ea}
+/* Higher contrast, simplified login form; styling only, auth rules unchanged. */
+body.auth-locked.public-login-open .auth-gate{background:radial-gradient(circle at 15% 10%,#173657 0,transparent 40%),#0c1827}
+body.auth-locked.public-login-open .auth-card{width:min(455px,100%);padding:34px;border-radius:22px;background:#1b293b;border:1px solid #3b5069;box-shadow:0 25px 70px rgba(0,0,0,.3);color:#f1f6fc}
+body.auth-locked.public-login-open .auth-logo,body.auth-locked.auth-checking .auth-logo{display:flex;align-items:center;justify-content:center;gap:10px;font-size:1.65rem;letter-spacing:-.035em;color:#f1f7ff}
+.auth-logo-accent{color:#7bc2ff}
+.auth-mark{display:inline-grid;place-items:center;width:38px;height:38px;border-radius:11px;background:#1d5e95;color:#fff;font-size:21px}
+body.auth-locked.public-login-open .auth-subtitle,body.auth-locked.auth-checking .auth-subtitle{color:#b8c9db;margin:9px 0 27px}
+body.auth-locked.public-login-open .auth-close{color:#9dd0ff;margin-bottom:20px}
+.auth-eyebrow{font-size:.72rem;letter-spacing:.15em;font-weight:800;color:#8dc9ff;margin-bottom:9px}
+body.auth-locked.public-login-open .auth-card h1{font-size:1.9rem;margin:0 0 8px}
+body.auth-locked.public-login-open .auth-help{color:#c0cede;margin-bottom:22px}
+body.auth-locked.public-login-open .auth-card label{color:#e8f1fa;font-size:.9rem}
+body.auth-locked.public-login-open .auth-card input{background:#101e30;color:#f6faff;border:1px solid #526880;border-radius:10px;min-height:46px}
+body.auth-locked.public-login-open .auth-card input::placeholder{color:#a1b2c7}
+body.auth-locked.public-login-open .auth-card input:focus{outline:2px solid #74bfff;outline-offset:1px}
+body.auth-locked.public-login-open .auth-primary{background:#59a7eb;color:#091d33;border-radius:11px;min-height:48px;font-weight:850}
+body.auth-locked.public-login-open .auth-link{color:#a7d4ff}
+body.auth-locked.public-login-open .auth-password-toggle{color:#f3f8ff;background:#2b4865;border:1px solid #607c99}
+/* Green feedback stays on the existing header refresh control. */
+#refreshBtn.refreshing,#refreshBtn.refresh-ready,.dark #refreshBtn.refreshing,.dark #refreshBtn.refresh-ready{background:#15803d!important;color:#fff!important;border-color:#22c55e!important}
+#refreshBtn.refreshing{animation:pp360RefreshPulse .75s ease-in-out infinite alternate;cursor:wait}
+#refreshBtn.refresh-ready{box-shadow:0 0 0 3px rgba(34,197,94,.2)}
+@keyframes pp360RefreshPulse{to{filter:brightness(1.35)}}
+@media(max-width:560px){body.auth-locked.public-login-open .auth-card{padding:26px 21px}}

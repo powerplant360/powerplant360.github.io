@@ -6,6 +6,7 @@
   }
   let backendSession = null;
   let backendRole = null;
+  let initialRefreshFeedbackShown = false;
   let passwordRecoveryMode = /(?:[?#&])type=recovery(?:&|$)/i.test(window.location.href);
 
   function backendConfigured() {
@@ -31,6 +32,7 @@
 
   function setAuthLocked(locked) {
     document.body.classList.toggle('auth-locked', Boolean(locked));
+    if (!locked) document.body.classList.remove('auth-checking');
     document.body.classList.toggle('auth-ready', !locked);
     if (!locked) {
       document.body.classList.remove('public-login-open', 'public-recovery');
@@ -53,19 +55,21 @@
 
   function showLoginGate(message='') {
     passwordRecoveryMode = false;
+    document.body.classList.remove('auth-checking');
     setAuthLocked(true);
     if (message) document.body.classList.add('public-login-open');
     const body = document.getElementById('authGateBody');
     if (!body) return;
 
     body.innerHTML =
-      '<h1>Sign in</h1>' +
-      '<p class="auth-help">Admin, Engineer and Viewer accounts use the same secure login.</p>' +
+      '<div class="auth-eyebrow">AUTHORIZED MEMBER ACCESS</div>' +
+      '<h1>Welcome back</h1>' +
+      '<p class="auth-help">Sign in to your engineering workspace. One secure login for Admin, Engineer and Viewer accounts.</p>' +
       '<label for="loginEmail">Email</label>' +
       '<input id="loginEmail" type="email" autocomplete="username" placeholder="Email address">' +
       '<label for="loginPassword">Password</label>' +
       '<div class="auth-password-wrap"><input id="loginPassword" type="password" autocomplete="current-password" placeholder="Password"><button type="button" class="auth-password-toggle" aria-label="Show password" aria-pressed="false" onclick="toggleAuthPassword(\'loginPassword\',this)">Show</button></div>' +
-      '<button class="auth-primary" onclick="login()">Login</button>' +
+      '<button class="auth-primary" onclick="login()">Sign in securely <span aria-hidden="true">→</span></button>' +
       '<button class="auth-link" onclick="showForgotPassword()">Forgot password?</button>' +
       '<div id="loginMsg" class="auth-message">' + esc(message || '') + '</div>';
 
@@ -206,6 +210,23 @@
     setAuthLocked(false);
     if (enteringPortal && typeof show === 'function') show('Home');
     applySearchRoleUi();
+    // A green refresh button means the restored, authorized workspace is ready.
+    const refreshBtn = document.getElementById('refreshBtn');
+    const refreshed = sessionStorage.getItem('pp360:refresh-pending') === '1' ||
+      performance.getEntriesByType('navigation')[0]?.type === 'reload';
+    if (refreshBtn && refreshed && !initialRefreshFeedbackShown) {
+      initialRefreshFeedbackShown = true;
+      try { sessionStorage.removeItem('pp360:refresh-pending'); } catch (_) {}
+      refreshBtn.classList.remove('refreshing');
+      refreshBtn.classList.add('refresh-ready');
+      refreshBtn.textContent = '✓';
+      refreshBtn.title = 'Refresh complete';
+      setTimeout(() => {
+        refreshBtn.classList.remove('refresh-ready');
+        refreshBtn.textContent = '↻';
+        refreshBtn.title = 'Hard Refresh';
+      }, 1800);
+    }
   }
 
   function applySearchRoleUi() {
@@ -1855,6 +1876,17 @@
 
 
   window.hardRefreshPP360 = async function () {
+    const refreshBtn = document.getElementById('refreshBtn');
+    if (refreshBtn?.classList.contains('refreshing')) return;
+    if (refreshBtn) {
+      refreshBtn.classList.remove('refresh-ready');
+      refreshBtn.classList.add('refreshing');
+      refreshBtn.textContent = '↻';
+      refreshBtn.title = 'Refreshing PowerPlant360…';
+      refreshBtn.setAttribute('aria-label', 'Refreshing PowerPlant360');
+      refreshBtn.disabled = true;
+    }
+    try { sessionStorage.setItem('pp360:refresh-pending','1'); } catch (_) {}
     try {
       if ('serviceWorker' in navigator) {
         const regs = await navigator.serviceWorker.getRegistrations();
