@@ -1824,6 +1824,12 @@
     if(ext==='pptx')return 'pptx';
     return null;
   }
+  function pp360DocumentIndexStatus(d) {
+    if(d?.processing_status==='processing')return 'Indexing…';
+    if(d?.processing_status==='error')return 'Index failed';
+    return d?.processing_status==='ready'&&String(d?.extracted_text||'').trim()
+      ? 'Search ready' : 'Not indexed';
+  }
   function pp360DocumentIndexAction(d) {
     if(backendRole!=='admin'||!d?.id)return '';
     const id=String(d.id);
@@ -1963,15 +1969,19 @@
     const state=pp360ManualIndexState;
     if(!state||state.busy||backendRole!=='admin')return;
     const d=state.doc,capability=pp360IndexCapability(d);
+    if(d.processing_status==='processing')return pp360ManualIndexMessage('This document is already being indexed.');
     if(!capability)return pp360ManualIndexMessage('Automatic indexing is not available for this format; paste verified text instead.');
     if(d.processing_status==='ready'&&
       !confirm('Automatic re-indexing may replace existing extracted text. Continue?'))return;
     if(['pdf','image','office'].includes(capability)){
-      const id=state.id;
+      const id=state.id,section=state.section;
       closeManualIndex();
       if(capability==='pdf')await indexExistingPdf(id);
       else if(capability==='image')await window.indexExistingImage(id);
       else await window.indexExistingOffice(id);
+      if(section && document.getElementById('view')?.querySelector('.equipment-doc-list')){
+        await window.renderEquipmentDocuments(section.category,section.section);
+      }
       return;
     }
     state.busy=true;
@@ -2058,7 +2068,7 @@
               <div class="equipment-doc-row">
                 <div class="equipment-doc-main">
                   <b>${esc(d.file_name)}</b>
-                  <div class="muted small">${esc(d.document_type || 'Other')} • ${formatBytes(d.file_size || 0)}${d.page_count ? ' • '+d.page_count+' pages' : ''} • ${d.processing_status==='ready'?'Search ready':'Not yet searchable'}</div>
+                  <div class="muted small">${esc(d.document_type || 'Other')} • ${formatBytes(d.file_size || 0)}${d.page_count ? ' • '+d.page_count+' pages' : ''} • ${pp360DocumentIndexStatus(d)}</div>
                 </div>
                 <div class="actions">
                   ${pp360DocumentIndexAction(d)}
@@ -3672,6 +3682,7 @@
         return '<div class="admin-file-row">' +
           '<div class="admin-file-name" title="' + esc(d.file_name || '') + '">' +
             '<b>' + esc(d.file_name || 'Unnamed document') + '</b>' +
+            '<div class="muted small">' + esc(pp360DocumentIndexStatus(d)) + '</div>' +
           '</div>' +
           '<div class="admin-file-actions">' +
             indexAction +
