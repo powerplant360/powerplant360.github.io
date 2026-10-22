@@ -79,7 +79,12 @@ function sourceEvidenceExcerpt(question:string, answerLines:string[], raw:string
     if(numbers.length&&!numericHits)continue;
     const scopeHits=scopeWords.filter(w=>labelWords.has(w)).length;
     const score=hits*30+numericHits*32+scopeHits*18+(hits===wanted.length&&hits>1?25:0);
-    if(!best||score>best.score)best={score,excerpt:lines.slice(i,i+5).join(" | ").slice(0,450)};
+    // Stop immediately after the matching value, before the next equipment.
+    const upcoming=lines.slice(i,i+5);
+    const matchedIndex=numbers.length?upcoming.findIndex((part,j)=>j>0&&
+      numbers.some(n=>new RegExp("(^|[^0-9.])"+n.replace(/\./g,"\\.")+"(?![0-9.])").test(part.replace(/,/g,"")))):-1;
+    const excerptParts=upcoming.slice(0,matchedIndex>=0?matchedIndex+1:Math.min(2,upcoming.length));
+    if(!best||score>best.score)best={score,excerpt:excerptParts.join(" | ").slice(0,450)};
   }
   return best?.excerpt||"";
 }
