@@ -300,7 +300,7 @@ function renderSearchHistory(){
   if(src && /^[a-f0-9-]{36}$/i.test(String(src.document_id||''))){
     const search=history[i]||'';
     const snapshot=readAnswerHistory()[norm(search)];
-    window.viewDocument(src.document_id,src.page||undefined,{query:search,answerLines:Array.isArray(snapshot?.lines)?snapshot.lines:[]});
+    window.viewDocument(src.document_id,src.page||undefined,{query:search,answerLines:Array.isArray(snapshot?.lines)?snapshot.lines:[],evidence_excerpt:String(src.evidence_excerpt||'').slice(0,500)});
   }
  }));
 }
