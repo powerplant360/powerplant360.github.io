@@ -711,11 +711,11 @@ source_indices must contain only the source numbers that directly support the an
     const answerLines = answerLinesSafe;
     // Reject bare ratings such as "Capacity: 3000" for a level-specific
     // reservoir volume request. The answer must identify a volume unit.
-    const reservoirLevelAsked = /\\b(reservoir|water tank|storage tank)\\b/i.test(question) &&
-      (/\\b\\d+(?:\\.\\d+)?\\s*(?:mtr|meter|metre|meters|metres|m)\\b/i.test(question) ||
-       /\\b(?:level|at)\\s*\\d+(?:\\.\\d+)?\\b/i.test(question));
+    const reservoirLevelAsked = /\b(reservoir|water tank|storage tank)\b/i.test(question) &&
+      (/\b\d+(?:\.\d+)?\s*(?:mtr|meter|metre|meters|metres|m)\b/i.test(question) ||
+       /\b(?:level|at)\s*\d+(?:\.\d+)?\b/i.test(question));
     const verifiedAnswerUnits = !reservoirLevelAsked ||
-      answerLines.some((line:string) => /\\b(?:m3|m³|cu\\.?\\s*m|cubic\\s*met(?:er|re)s?|kl|kilolit(?:er|re)s?|lit(?:er|re)s?|ltr|ltrs)\\b/i.test(line));
+      answerLines.some((line:string) => /\b(?:m3|m³|cu\.?\s*m|cubic\s*met(?:er|re)s?|kl|kilolit(?:er|re)s?|lit(?:er|re)s?|ltr|ltrs)\b/i.test(line));
     if (!parsed || !answerLines.length || isNoExact(answerLines) || !verifiedAnswerUnits) {
       await recordUsage(plantUsage, "plant", scope);
       return new Response(JSON.stringify({
