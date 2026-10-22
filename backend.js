@@ -4196,35 +4196,55 @@
       (excerptWords.length?Math.round(70*excerptHits/excerptWords.length):0)+
       (hits===queryWords.length&&hits>1?30:0);
   }
+  // Common locator for Word, text, slide previews and future document tabs.
+  // Manual Find does not depend on the AI answer; sourced matches require
+  // equipment/parameter identity and must not borrow numbers from other rows.
   function pp360FocusIndexes(blocks,focus) {
     if(!focus||!Array.isArray(blocks)||!blocks.length)return [];
-    const ranked=blocks.map((line,i)=>({
-      i,score:pp360FocusScore(line,focus,[blocks[i+1]||'',blocks[i+2]||''].join(' '))
-    })).filter(x=>x.score>=18).sort((x,y)=>y.score-x.score);
-    if(!ranked.length){
-      // Only navigate to a related source when the returned answer itself
-      // explicitly names the different shaft parameter. Never label this
-      // as a verified bearing measurement.
-      const answer=String((focus.answerLines||[])[0]||'');
-      const label=answer.split(':')[0];
-      if(/bearing/i.test(focus.query||'') && /\bshaft\b/i.test(label)){
-        const required=pp360FocusWords(label);
-        const values=pp360FocusNumbers(answer);
-        const exact=[];
-        blocks.forEach((line,i)=>{
-          const words=new Set(pp360FocusWords(line));
-          if(required.length<3||!required.every(w=>words.has(w)))return;
-          const nearby=[line,blocks[i+1]||'',blocks[i+2]||''].join(' ').replace(/,/g,'');
-          if(values.length && !values.some(v=>new RegExp('(^|[^0-9.])'+v.replace(/\./g,'\\.')+'(?![0-9.])').test(nearby)))return;
-          exact.push(i);
-        });
-        return exact.slice(0,1);
-      }
-      return [];
+    const query=String(focus.query||'').trim();
+    if(focus.manual===true){
+      if(!query)return [];
+      const q=query.toLowerCase().replace(/\s+/g,' ');
+      return blocks.map((line,i)=>String(line).toLowerCase().replace(/\s+/g,' ').includes(q)?i:-1).filter(i=>i>=0);
     }
-    const best=ranked[0].score;
-    return ranked.filter(x=>x.score>=Math.max(18,best*.94)).slice(0,3)
-      .sort((x,y)=>x.i-y.i).map(x=>x.i);
+    const answerLines=Array.isArray(focus.answerLines)?focus.answerLines:[];
+    const cleanLabel=line=>String(line||'').split(/\s*:\s*/)[0];
+    const labels=answerLines.map(cleanLabel).filter(l=>pp360FocusWords(l).length>=2);
+    const excerpt=String(focus.excerpt||'');
+    const excerptLabel=excerpt.split(/\s*\|\s*/).find(part=>pp360FocusWords(part).length>=2)||'';
+    const candidates=[...new Set([excerptLabel,...labels].filter(Boolean))];
+    const focusWords=pp360FocusWords(query);
+    const matches=[];
+    const isGeneric=new Set(['interlock','interlocks','pressure','limit','limits','setting','settings','trip','high','low','condition','conditions']);
+    for(let i=0;i<blocks.length;i++){
+      const line=String(blocks[i]||'');
+      const rowWords=new Set(pp360FocusWords(line));
+      // Exact named label from source or answer, never only a shared number.
+      let best=0;
+      for(const label of candidates){
+        const terms=pp360FocusWords(label).filter(w=>!isGeneric.has(w));
+        if(terms.length<2)continue;
+        const hits=terms.filter(w=>rowWords.has(w)).length;
+        if(hits<Math.max(2,Math.ceil(terms.length*.8)))continue;
+        const allNums=pp360FocusNumbers(answerLines.join(' '));
+        const around=[line,blocks[i+1]||'',blocks[i+2]||''].join(' ').replace(/,/g,'');
+        if(allNums.length && !allNums.some(n=>new RegExp('(^|[^0-9.])'+n.replace(/\./g,'\\.')+'(?![0-9.])').test(around)))continue;
+        const score=hits*30+(terms.length===hits?30:0);
+        best=Math.max(best,score);
+      }
+      // Query-only navigation is allowed only for highly specific wording.
+      // It must never present a generic interlock keyword as evidence.
+      const specific=focusWords.filter(w=>!isGeneric.has(w));
+      if(specific.length>=2 && specific.every(w=>rowWords.has(w))){
+        const score=specific.length*18;
+        best=Math.max(best,score);
+      }
+      if(best)matches.push({i,score:best});
+    }
+    matches.sort((a,b)=>b.score-a.score||a.i-b.i);
+    if(!matches.length)return [];
+    const top=matches[0].score;
+    return matches.filter(m=>m.score>=top*.95).slice(0,8).map(m=>m.i);
   }
 
   function pp360ScrollToMatch(container,node) {
@@ -4242,10 +4262,21 @@
   window.closeWordPreview = closeWordPreview;
 
 
+  let pp360WordHits=[],pp360WordHitCursor=0;
+  window.pp360StepWordMatch=function(step){
+    if(!pp360WordHits.length)return;
+    pp360WordHitCursor=(pp360WordHitCursor+step+pp360WordHits.length)%pp360WordHits.length;
+    const body=document.getElementById('wordPreviewBody');
+    const node=body?.querySelectorAll('.pp360-evidence-match')[pp360WordHitCursor];
+    if(node)pp360ScrollToMatch(body,node);
+    const status=document.getElementById('pp360WordMatchStatus');
+    if(status)status.textContent=(pp360WordHitCursor+1)+' / '+pp360WordHits.length+' matching passages (check source context)';
+  };
   function pp360RenderWordEvidence(blocks,focus) {
     const target=document.getElementById('wordPreviewBody');
     if(!target)return;
     const indexes=pp360FocusIndexes(blocks,focus);
+    pp360WordHits=indexes;pp360WordHitCursor=0;
     const matched=new Set(indexes);
     const fragment=document.createDocumentFragment();
     let focusNode=null;
@@ -4263,7 +4294,7 @@
           indexes.some(i=>/\bshaft\b/i.test(blocks[i]) && !/\bbearing\b/i.test(blocks[i]))
           ? 'Related shaft-vibration passage; bearing limit NOT verified'
           : indexes.length+' closest text match'+(indexes.length===1?'':'es')+' highlighted'):
-          'No reliable matching passage found. Try Find or inspect the document.')
+          'Exact supporting passage could not be located. Try Find or inspect the document.')
       :'';
     if(focusNode){
       requestAnimationFrame(()=>pp360ScrollToMatch(target,focusNode));
@@ -4284,6 +4315,8 @@
           <p class="muted small">Text-only secure preview. Complex layouts, images and embedded charts may not appear.</p>
           <div class="pp360-document-find"><input id="pp360WordFind" type="search" placeholder="Find in this document" aria-label="Find text in document">
             <button type="button" onclick="pp360FindWordText()">Find</button>
+            <button type="button" onclick="pp360StepWordMatch(-1)" aria-label="Previous match">↑</button>
+            <button type="button" onclick="pp360StepWordMatch(1)" aria-label="Next match">↓</button>
             <span class="muted small" id="pp360WordMatchStatus" role="status"></span></div>
           <div class="pp360-word-body" id="wordPreviewBody" role="document">Loading document…</div>
         </div>
@@ -4334,7 +4367,7 @@
       pp360WordPreviewBlocks=blocks.filter(Boolean);
       window.pp360FindWordText=function(){
         const term=document.getElementById('pp360WordFind')?.value||'';
-        pp360RenderWordEvidence(pp360WordPreviewBlocks,term?{query:term,answerLines:[]}:null);
+        pp360RenderWordEvidence(pp360WordPreviewBlocks,term?{query:term,answerLines:[],manual:true}:null);
       };
       if(focus?.query){
         const input=document.getElementById('pp360WordFind');
