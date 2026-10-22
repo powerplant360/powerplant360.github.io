@@ -1868,7 +1868,7 @@
           <h2>${esc(sectionName)}</h2>
           <p class="muted">${filtered.length} matching document${filtered.length===1?'':'s'} from ${all.length} uploaded for this equipment.</p>
         </div>
-        <button onclick="equipmentPage('${String(category).replace(/'/g,"\\'")}')">Back</button>
+        <button onclick="${category==='Common'?"show('Common Documents')":`equipmentPage('${String(category).replace(/'/g,"\\'")}')`}">Back</button>
       </div>
       ${filtered.length ? groupHtml : '<div class="notice">No matching documents found in this section yet. Use <b>Documents</b> to view all uploaded files for this equipment.</div>'}
     </div>`;

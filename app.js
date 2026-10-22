@@ -247,7 +247,7 @@ window.pp360SetHistoryUser=function(userId){
  // The old unscoped pp360history is deliberately never loaded or migrated:
  // it cannot safely be attributed to any individual account.
 };
-const tabs=['Home','Search History','Calculators','DCS Analysis','Mock Interview','Admin'];
+const tabs=['Home','Common Documents','Search History','Calculators','DCS Analysis','Mock Interview','Admin'];
 
 const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 const norm=s=>s.toLowerCase().replace(/[^\w\s&/-]/g,' ').replace(/\s+/g,' ').trim();
@@ -319,7 +319,7 @@ try {
  if(pp360WasReload) pp360PendingReload=JSON.parse(sessionStorage.getItem(pp360ReloadKey)||'null');
  else sessionStorage.removeItem(pp360ReloadKey);
 } catch (_) { pp360PendingReload=null; }
-const pp360AllowedViews=['Home','Search History','Calculators','DCS Analysis','Mock Interview','Admin'];
+const pp360AllowedViews=['Home','Common Documents','Search History','Calculators','DCS Analysis','Mock Interview','Admin'];
 function pp360SaveRefreshView(next){
  if(document.body.classList.contains('auth-locked') || pp360PendingReload) return;
  try { sessionStorage.setItem(pp360ReloadKey,JSON.stringify(next)); } catch (_) {}
@@ -374,6 +374,7 @@ function show(x){
    </div>`;
    v.querySelectorAll('[data-home-equipment]').forEach(b=>b.addEventListener('click',()=>equipmentPage(equipment[Number(b.dataset.homeEquipment)])));
  }
+ if(x==='Common Documents')commonDocumentsPage();
  if(x==='Search History')renderSearchHistory();
  if(x==='Calculators')window.renderEngineeringTools ? window.renderEngineeringTools() : (v.innerHTML='<div class="card"><h2>Calculators</h2><p class="muted">Calculator module is loading. Refresh once.</p></div>');
  if(x==='DCS Analysis')v.innerHTML=`<div class='card'><h2>DCS Daily Report Analysis</h2><p>Production version will parse authorized Excel/CSV daily reports, compare parameters against approved limits and detect historical deviations.</p><div class="notice">For safety, the app will not create alarm/trip limits from generic internet values. You will define or upload the approved plant limits.</div><table><tr><th>Parameter</th><th>Reading</th><th>Status</th></tr><tr><td>Main Steam Temp</td><td>Demo</td><td><span class='badge ok'>NORMAL</span></td></tr><tr><td>ID Fan-A Current</td><td>+14% vs 7-day avg</td><td><span class='badge danger'>ATTENTION</span></td></tr></table></div>`;
@@ -398,7 +399,34 @@ function equipmentPage(e){
      </div>
      <input id="equipmentPackageInput" type="file" accept=".zip,application/zip" hidden onchange="equipmentPackageSelected(this)">
    </div>` : '';
- document.getElementById('view').innerHTML=`<div class=card><span class=badge>${e}</span><h2>${e}</h2>${equipmentUpload}<div class=actions>${['Technical Data','O&M Manuals','Nameplate','Interlocks','SOP','Troubleshooting','Startup / Loading Curves','Calculations','Documents','Notes'].map(b=>`<button onclick="equipmentAction('${e}','${b}')">${b}</button>`).join('')}</div>${e==='CFBC Boiler'?'<h3>Pressure Parts</h3><button class=primary onclick="pressurePartsPage()">Pressure Parts</button>':''}</div>`;
+ document.getElementById('view').innerHTML=`<div class=card><span class=badge>${e}</span><h2>${e}</h2>${equipmentUpload}<div class=actions>${['Technical Data','O&M Manuals','Nameplate','Troubleshooting','Calculations','Documents','Notes'].map(b=>`<button onclick="equipmentAction('${e}','${b}')">${b}</button>`).join('')}</div>${e==='CFBC Boiler'?'<h3>Pressure Parts</h3><button class=primary onclick="pressurePartsPage()">Pressure Parts</button>':''}</div>`;
+}
+
+// Shared reference library. Documents assigned category 'Common' are available
+// to all selected department searches, while department documents stay scoped.
+function commonDocumentsPage(){
+ pp360SaveRefreshView({tab:'Common Documents'});
+ renderTabs('Common Documents');
+ const v=document.getElementById('view');
+ if(!v)return;
+ const upload=admin?`<div class="equipment-uploadbar">
+  <div><b>Common Documents</b><div class="muted small">Upload shared procedures, interlocks and startup/loading curves for all departments.</div></div>
+  <div class="actions"><button onclick="openEquipmentUpload('Common')">Upload Documents</button>
+  <button class="primary" onclick="openEquipmentPackagePicker('Common')">Upload Manual Package (.zip)</button></div>
+  <input id="equipmentPackageInput" type="file" accept=".zip,application/zip" hidden onchange="equipmentPackageSelected(this)">
+ </div>`:'';
+ v.innerHTML=`<div class="card"><span class="badge">Shared plant reference</span>
+  <h2>Common Documents</h2>
+  <p class="muted">Documents uploaded here are searchable from every department. Keep equipment-specific manuals in their own departments.</p>
+  ${upload}
+  <div class="actions">
+   ${['Interlocks','SOP','Startup / Loading Curves','Documents'].map((name,j)=>`<button type="button" data-common-section="${j}">${esc(name)}</button>`).join('')}
+  </div>
+ </div>`;
+ v.querySelectorAll('[data-common-section]').forEach(btn=>btn.addEventListener('click',()=>{
+  const names=['Interlocks','SOP','Startup / Loading Curves','Documents'];
+  if(typeof window.renderEquipmentDocuments==='function')window.renderEquipmentDocuments('Common',names[Number(btn.dataset.commonSection)]);
+ }));
 }
 
 let pendingEquipmentUpload = '';
@@ -581,7 +609,7 @@ function searchAll(){
 
 const categories=[
  'CFBC Boiler','Steam Turbine','Air Cooled Condenser','CHP','AHS',
- 'WTP / ETP','Cooling Tower','Electrical','C&I','Operations','General'
+ 'WTP / ETP','Cooling Tower','Electrical','C&I','Operations','Common','General'
 ];
 
 const docTypes=[

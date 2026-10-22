@@ -491,40 +491,36 @@ Deno.serve(async (req) => {
     const ts = expandedSearchTerms(question, scope);
     const barePlantLookup = isBarePlantLookup(question);
 
-    let query = supabase
-      .from("documents")
-      .select("id,file_name,category,document_type,extracted_text,page_count,metadata")
-      .eq("processing_status", "ready")
-      .not("extracted_text", "is", null);
-
-    query = query.eq("category", scope);
-
-    // Limit candidate documents using lexical terms before page scoring.
-    if (ts.length) {
-      const safe = ts.slice(0, 8)
-        .map(t => t.replace(/[,%()]/g, "").trim())
-        .filter(Boolean);
-      const clauses = safe.flatMap(t => [
-        `extracted_text.ilike.%${t}%`,
-        `file_name.ilike.%${t}%`
-      ]);
-      query = query.or(clauses.join(","));
+    const columns = "id,file_name,category,document_type,extracted_text,page_count,metadata";
+    const safeTerms = ts.slice(0,8).map(t=>t.replace(/[,%()]/g,"").trim()).filter(Boolean);
+    const clauses = safeTerms.flatMap(t=>[
+      `extracted_text.ilike.%${t}%`, `file_name.ilike.%${t}%`
+    ]);
+    async function scopedDocs(category:string, limit:number){
+      let q = supabase.from("documents").select(columns)
+        .eq("processing_status","ready").eq("category",category)
+        .not("extracted_text","is",null);
+      if(clauses.length)q=q.or(clauses.join(","));
+      let {data,error}=await q.limit(limit);
+      if(error)return {data,error};
+      if(!data?.length){
+        const retry=await supabase.from("documents").select(columns)
+          .eq("processing_status","ready").eq("category",category)
+          .not("extracted_text","is",null).limit(limit);
+        data=retry.data;error=retry.error;
+      }
+      return {data,error};
     }
-
-    let { data: docs, error } = await query.limit(40);
-
-    // If scoped lexical retrieval is too strict, retry within the scope without token filter.
-    if (!error && (!docs || !docs.length)) {
-      const retry = await supabase
-        .from("documents")
-        .select("id,file_name,category,document_type,extracted_text,page_count,metadata")
-        .eq("processing_status", "ready")
-        .eq("category", scope)
-        .not("extracted_text", "is", null)
-        .limit(30);
-      docs = retry.data;
-      error = retry.error;
-    }
+    // Shared files are added for every department, but never replace its own
+    // document candidates. A separate query preserves each retrieval budget.
+    const [departmentResult, commonResult] = await Promise.all([
+      scopedDocs(scope,40), scopedDocs("Common",20)
+    ]);
+    const error = departmentResult.error || commonResult.error;
+    const docs = [
+      ...(departmentResult.data||[]),
+      ...(scope==="Common"?[]:(commonResult.data||[]))
+    ];
 
     if (error) throw error;
     if (!docs?.length) {
@@ -581,7 +577,9 @@ Deno.serve(async (req) => {
       for (const p of pages) {
         const text = String(p.text || "").replace(/\s+/g, " ").trim();
         if (!text) continue;
-        const score = scoreChunk(question, text, d.file_name || "", d.category || "", sourcePath);
+        const baseScore = scoreChunk(question, text, d.file_name || "", scope, sourcePath);
+        // Department evidence takes priority on equal relevance; shared docs are fallback/context.
+        const score = baseScore - (d.category === 'Common' ? 25 : 0);
         if (score <= 0) continue;
         chunks.push({
           score,
