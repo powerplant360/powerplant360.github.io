@@ -4134,7 +4134,7 @@
     target.replaceChildren(fragment);
     const status=document.getElementById('pp360WordMatchStatus');
     if(status)status.textContent=focus
-      ? (indexes.length?indexes.length+' supporting passage'+(indexes.length===1?'':'s')+' highlighted':
+      ? (indexes.length?indexes.length+' closest text match'+(indexes.length===1?'':'es')+' highlighted':
           'No close text match. Try Find with fewer words.')
       :'';
     if(focusNode){
@@ -4325,7 +4325,7 @@
           });
           body.replaceChildren(fragment);
           requestAnimationFrame(()=>pp360ScrollToMatch(body,first));
-          info.textContent='Text preview · supporting passage highlighted';
+          info.textContent='Text preview · closest matching passage highlighted';
         }else body.textContent=fullText;
         if(!match.length)info.textContent='Text preview · scripts disabled';
       }else if(ext==='pptx'){
