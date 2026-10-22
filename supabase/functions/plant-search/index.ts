@@ -58,35 +58,32 @@ function queryAliases(q:string, scope:string) {
 
 
 function sourceEvidenceExcerpt(question:string, answerLines:string[], raw:string, scope:string):string {
-  // Extract citation from original line boundaries, not flattened context.
-  const lines=String(raw||"").replace(/\r/g,"").split("\n")
-    .map(s=>s.trim()).filter(s=>s && s!=="|" && !/^\[\[PAGE\s/i.test(s));
-  const stem=(w:string)=>w.length>4&&/s$/.test(w)&&!/(ss|us)$/.test(w)?w.slice(0,-1):w;
-  const words=(s:string)=>norm(s).split(/[^a-z0-9.]+/).filter(Boolean).map(stem);
-  const wanted=[...new Set(tokens(question).map(stem))];
-  if(!wanted.length)return "";
-  const required=Math.max(1,Math.ceil(wanted.length*.67));
-  const numbers=[...new Set(answerLines.join(" ").match(/\b\d[\d,]*(?:\.\d+)?\b/g)||[])].map(n=>n.replace(/,/g,""));
-  const scopeWords=[...new Set(tokens(scope).map(stem))];
-  let best:{score:number,excerpt:string}|null=null;
+  // Evidence anchors are candidate labels, not verified citations.
+  // Keep row boundaries, match distinctive answer labels and nearby values.
+  const lines=String(raw||"").replace(/\r/g,"").split("\n").map(x=>x.trim())
+    .filter(x=>x && x!=="|" && !/^\[\[PAGE\s/i.test(x));
+  const generic=new Set(["high","low","pressure","interlock","interlocks","trip","setting","setpoint","limits","limit","condition","conditions","plant","pump"]);
+  const wordSet=(s:string)=>new Set(tokens(s).filter(w=>!generic.has(w)));
+  const answerLabels=answerLines.map(x=>String(x).split(/\s*:\s*/)[0]).filter(Boolean);
+  const queryTerms=wordSet(question);
+  let best:{score:number,text:string}|null=null;
   for(let i=0;i<lines.length;i++){
-    const label=lines[i];
-    const labelWords=new Set(words(label));
-    const hits=wanted.filter(w=>labelWords.has(w)).length;
-    if(hits<required)continue;
-    const nearby=lines.slice(i,i+5).join(" ").replace(/,/g,"");
-    const numericHits=numbers.filter(n=>new RegExp("(^|[^0-9.])"+n.replace(/\./g,"\\.")+"(?![0-9.])").test(nearby)).length;
-    if(numbers.length&&!numericHits)continue;
-    const scopeHits=scopeWords.filter(w=>labelWords.has(w)).length;
-    const score=hits*30+numericHits*32+scopeHits*18+(hits===wanted.length&&hits>1?25:0);
-    // Stop immediately after the matching value, before the next equipment.
-    const upcoming=lines.slice(i,i+5);
-    const matchedIndex=numbers.length?upcoming.findIndex((part,j)=>j>0&&
-      numbers.some(n=>new RegExp("(^|[^0-9.])"+n.replace(/\./g,"\\.")+"(?![0-9.])").test(part.replace(/,/g,"")))):-1;
-    const excerptParts=upcoming.slice(0,matchedIndex>=0?matchedIndex+1:Math.min(2,upcoming.length));
-    if(!best||score>best.score)best={score,excerpt:excerptParts.join(" | ").slice(0,450)};
+    const row=lines[i],rowWords=wordSet(row);
+    const near=lines.slice(i,i+5).join(" | ");
+    const nums=new Set((near.match(/\b\d[\d,]*(?:\.\d+)?\b/g)||[]).map(n=>n.replace(/,/g,"")));
+    for(const answer of answerLines){
+      const label=String(answer).split(/\s*:\s*/)[0];
+      const terms=wordSet(label);
+      if(terms.size<2)continue;
+      const overlap=[...terms].filter(w=>rowWords.has(w)).length;
+      if(overlap<Math.max(2,Math.ceil(terms.size*.8)))continue;
+      const answerNums=(String(answer).split(/\s*:\s*/).slice(1).join(":").match(/\b\d[\d,]*(?:\.\d+)?\b/g)||[]).map(n=>n.replace(/,/g,""));
+      if(answerNums.length&&!answerNums.some(n=>nums.has(n)))continue;
+      const score=overlap*35+([ ...queryTerms].filter(w=>rowWords.has(w)).length*10);
+      if(!best||score>best.score)best={score,text:near.slice(0,450)};
+    }
   }
-  return best?.excerpt||"";
+  return best?.text||"";
 }
 
 function isBarePlantLookup(q:string) {
