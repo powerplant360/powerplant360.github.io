@@ -313,7 +313,7 @@ function renderTabs(active='Home'){
 
 // Refresh-only navigation state: a new visit always starts on Home.
 const pp360ReloadKey='pp360:refresh-view';
-const pp360WasReload=performance.getEntriesByType('navigation')[0]?.type==='reload';
+const pp360WasReload=performance.getEntriesByType('navigation')[0]?.type==='reload' || sessionStorage.getItem('pp360:refresh-pending')==='1';
 let pp360PendingReload=null;
 try {
  if(pp360WasReload) pp360PendingReload=JSON.parse(sessionStorage.getItem(pp360ReloadKey)||'null');
