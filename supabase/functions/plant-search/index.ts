@@ -99,6 +99,33 @@ function splitPages(extracted = "") {
   return out;
 }
 
+// Split every long extracted page/sheet into overlapping evidence windows.
+// DOCX, TXT, spreadsheet extracts and scanned/OCR pages can all exceed the
+// per-source context limit; ranking only the start loses later table rows.
+function evidenceWindows(raw:string, maxChars=3300, overlap=700) {
+  const text=String(raw||"").replace(/\r\n/g,"\n").trim();
+  if (!text) return [];
+  if (text.length<=maxChars) return [{text,offset:0}];
+  const result:Array<{text:string,offset:number}> = [];
+  let start=0;
+  while(start<text.length && result.length<180){
+    let end=Math.min(text.length,start+maxChars);
+    if(end<text.length){
+      // Prefer paragraph/row boundaries without sacrificing window coverage.
+      const boundary=text.lastIndexOf("\n",end);
+      if(boundary>start+Math.floor(maxChars*.72))end=boundary+1;
+    }
+    result.push({text:text.slice(start,end).trim(),offset:start});
+    if(end>=text.length)break;
+    let next=Math.max(start+1,end-overlap);
+    // Start at a nearby row/paragraph boundary if possible.
+    const boundary=text.indexOf("\n",next);
+    if(boundary>=0 && boundary<next+180)next=boundary+1;
+    start=next;
+  }
+  return result;
+}
+
 // A requested reservoir level must be grounded in a reservoir/tank record and
 // in the requested level. Generic "rated capacity" from another machine is not evidence.
 function reservoirLevelEvidence(question:string, text:string, fileName:string, sourcePath:string) {
@@ -575,38 +602,46 @@ Deno.serve(async (req) => {
       pageLookup.set(String(d.id), docPages);
 
       for (const p of pages) {
-        const text = String(p.text || "").replace(/\s+/g, " ").trim();
-        if (!text) continue;
-        const baseScore = scoreChunk(question, text, d.file_name || "", scope, sourcePath);
-        // Department evidence takes priority on equal relevance; shared docs are fallback/context.
-        const score = baseScore - (d.category === 'Common' ? 25 : 0);
-        if (score <= 0) continue;
-        chunks.push({
-          score,
-          document_id:d.id,
-          file_name:d.file_name,
-          category:d.category,
-          document_type:d.document_type,
-          page:p.page,
-          text:text.slice(0, 2800)
-        });
+        for (const window of evidenceWindows(p.text || "")) {
+          const text = window.text.replace(/\s+/g, " ").trim();
+          if (!text) continue;
+          const baseScore = scoreChunk(question, text, d.file_name || "", scope, sourcePath);
+          // Favor exact multiword phrases within the actual evidence window,
+          // not just individual terms appearing far apart in a long document.
+          const phrase = tokens(question).join(" ");
+          const phraseBoost = phrase.split(" ").length >= 2 && norm(text).includes(phrase) ? 130 : 0;
+          // Department evidence wins on close relevance; Common remains searchable everywhere.
+          const score = baseScore + phraseBoost - (d.category === "Common" ? 25 : 0);
+          if (score <= 0) continue;
+          chunks.push({
+            score,
+            document_id:d.id,
+            file_name:d.file_name,
+            category:d.category,
+            document_type:d.document_type,
+            page:p.page,
+            offset:window.offset,
+            text:text.slice(0, 3400)
+          });
+        }
       }
     }
 
     chunks.sort((a,b) => b.score - a.score);
 
-    // Avoid feeding duplicate adjacent windows from the same document.
+    // Deduplicate overlapping windows, not entire document pages.
+    // One DOCX often has a single extracted page containing dozens of tables.
     const ranked:Array<any> = [];
     for (const c of chunks) {
       const overlaps = ranked.some(x =>
         x.document_id === c.document_id &&
-        Number.isFinite(Number(x.page)) &&
-        Number.isFinite(Number(c.page)) &&
-        Math.abs(Number(x.page) - Number(c.page)) <= 1
+        x.page === c.page &&
+        Math.abs(Number(x.offset||0) - Number(c.offset||0)) < 1400
       );
       if (overlaps) continue;
+      if (ranked.filter(x=>x.document_id===c.document_id).length>=3)continue;
       ranked.push(c);
-      if (ranked.length >= 6) break;
+      if (ranked.length >= 8) break;
     }
 
     // Technical tables often continue onto the next PDF page. Append that page
@@ -614,7 +649,8 @@ Deno.serve(async (req) => {
     const top = ranked.map(c => {
       const page = Number(c.page);
       const pages = pageLookup.get(String(c.document_id));
-      const nextText = Number.isFinite(page) ? (pages?.get(page + 1) || "") : "";
+      const nextText = Number.isFinite(page) && (c.offset||0)===0 && c.text.length<2800
+        ? (pages?.get(page + 1) || "") : "";
       const hasNext = Boolean(nextText);
       const text = hasNext
         ? `[[PAGE ${page}]] ${c.text}\n[[PAGE ${page + 1} — CONTINUATION]] ${nextText.slice(0, 3200)}`
