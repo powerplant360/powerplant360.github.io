@@ -2233,3 +2233,28 @@ body:not(.auth-locked)>header:has(#headerClock) .header-clock strong{font-size:1
     align-self:center;
   }
 }
+
+/* Readable typography for the shared desktop/tablet/mobile header. */
+body.auth-ready>header:has(#headerClock) .brand-block>b{font-size:clamp(21px,1.55vw,27px)}
+body.auth-ready>header:has(#headerClock) .brand-block>small{font-size:13px}
+body.auth-ready>header:has(#headerClock) .plant-identity strong{font-size:clamp(17px,1.2vw,22px);line-height:1.35}
+body.auth-ready>header:has(#headerClock) .plant-identity small{font-size:14px;line-height:1.4}
+body.auth-ready>header:has(#headerClock) .header-user-identity strong{font-size:14px}
+body.auth-ready>header:has(#headerClock) .header-clock span{font-size:13px}
+body.auth-ready>header:has(#headerClock) .header-clock strong{font-size:19px}
+body.auth-ready>header:has(#headerClock) .header-clock small{font-size:12px}
+@media(max-width:960px){
+  body.auth-ready>header:has(#headerClock) .brand-block>b{font-size:clamp(18px,3.5vw,23px)}
+  body.auth-ready>header:has(#headerClock) .plant-identity strong{font-size:clamp(16px,3vw,20px)}
+  body.auth-ready>header:has(#headerClock) .plant-identity small{font-size:clamp(12px,2.3vw,15px)}
+  body.auth-ready>header:has(#headerClock) .header-clock span{font-size:12px}
+  body.auth-ready>header:has(#headerClock) .header-clock strong{font-size:16px}
+}
+@media(max-width:480px){
+  body.auth-ready>header:has(#headerClock) .brand-block>b{font-size:clamp(16px,4.1vw,20px)}
+  body.auth-ready>header:has(#headerClock) .plant-identity strong{font-size:clamp(15px,3.7vw,18px)}
+  body.auth-ready>header:has(#headerClock) .plant-identity small{font-size:clamp(12px,3vw,14px)}
+  body.auth-ready>header:has(#headerClock) .header-clock span{font-size:11px}
+  body.auth-ready>header:has(#headerClock) .header-clock strong{font-size:15px}
+  body.auth-ready>header:has(#headerClock) .header-clock small{font-size:10px}
+}
