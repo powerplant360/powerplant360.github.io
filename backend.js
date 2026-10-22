@@ -1990,7 +1990,7 @@
                 </select>
               </div>
 
-              <div class="paste-upload-hint"><b>Paste screenshot:</b> click here, then press <b>Ctrl+V</b></div>
+              <div class="paste-upload-hint" role="note"><b>Paste screenshot</b> — click this upload area, then press <kbd>Ctrl</kbd> + <kbd>V</kbd></div>
               <p>or</p>
               <label class="uploadchoose">Choose Files
                 <input id="file" type="file" multiple
