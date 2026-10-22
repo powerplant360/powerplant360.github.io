@@ -845,6 +845,14 @@ body.auth-locked .header-user{display:none}
   grid-template-columns:230px minmax(0,1fr);
   min-height:620px;
 }
+.plant-identity{display:flex;flex-direction:column;gap:2px;min-width:0;max-width:35vw;margin:auto;padding:3px 12px;text-align:center;color:#fff}
+.plant-identity[hidden]{display:none!important}
+.plant-identity strong{font-size:.95rem;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.plant-identity small{font-size:.76rem;opacity:.86;white-space:nowrap}
+.pp360-plant-details-form{max-width:550px;display:flex;flex-direction:column;gap:12px}
+.pp360-plant-details-form label{font-weight:700}
+.pp360-plant-details-form input{width:100%;border:1px solid var(--line);border-radius:8px;padding:10px;background:var(--card);color:var(--ink)}
+@media(max-width:750px){.plant-identity{max-width:24vw;padding:2px}.plant-identity strong{font-size:.72rem}.plant-identity small{display:none}}
 .admin-side-nav{
   padding:16px 12px;
   border-right:1px solid var(--line);
