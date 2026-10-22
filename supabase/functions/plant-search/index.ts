@@ -113,7 +113,7 @@ function reservoirLevelEvidence(question:string, text:string, fileName:string, s
   const requested = q.match(/\b(\d+(?:\.\d+)?)\s*(?:mtr|meter|metre|meters|metres|m)\b/) ||
     q.match(/\b(?:level|at)\s*(\d+(?:\.\d+)?)\b/);
   if (!requested) return true;
-  const level = requested[1].replace(/[.*+?^${}()|[\]\\]/g,"\\function scoreChunk(question: string, text: string, fileName: string, category: string, sourcePath: string) {");
+  const level = requested[1].replace(".", "\\.");
   const levelPattern = new RegExp("(^|[^0-9.])" + level + "(?![0-9.])");
   return levelPattern.test(hay);
 }
