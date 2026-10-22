@@ -1998,3 +1998,9 @@ body.auth-locked.public-login-open .auth-password-toggle{color:#f3f8ff;backgroun
 #refreshBtn.refresh-ready{box-shadow:0 0 0 3px rgba(34,197,94,.2)}
 @keyframes pp360RefreshPulse{to{filter:brightness(1.35)}}
 @media(max-width:560px){body.auth-locked.public-login-open .auth-card{padding:26px 21px}}
+
+/* Readable screenshot-paste instructions in light and dark themes. */
+.paste-upload-hint,.admin-simple .paste-upload-hint{background:var(--card,#fff);color:var(--text,#182c42);border:1px dashed var(--line,#8cb5df);border-radius:10px;line-height:1.55;opacity:1}
+.paste-upload-hint b{color:inherit}
+.paste-upload-hint kbd{display:inline-block;padding:1px 6px;margin:0 2px;border:1px solid currentColor;border-radius:5px;font:inherit;font-weight:700;background:transparent;color:inherit}
+body.dark .paste-upload-hint,html.dark .paste-upload-hint,[data-theme="dark"] .paste-upload-hint{background:#203349;color:#e8f3ff;border-color:#709ac2}

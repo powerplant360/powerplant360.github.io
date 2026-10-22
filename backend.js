@@ -1990,7 +1990,7 @@
                 </select>
               </div>
 
-              <div class="paste-upload-hint"><b>Paste screenshot:</b> click here, then press <b>Ctrl+V</b></div>
+              <div class="paste-upload-hint" role="note"><b>Paste screenshot</b> — click this upload area, then press <kbd>Ctrl</kbd> + <kbd>V</kbd></div>
               <p>or</p>
               <label class="uploadchoose">Choose Files
                 <input id="file" type="file" multiple
@@ -2805,7 +2805,9 @@
           status.innerHTML = '<span class="errtext">Upload saved, but Office indexing failed: ' + esc(indexErr.message || String(indexErr)) + '</span>';
         }
       } else {
-        status.innerHTML = '<span class="oktext">✓ Secure upload completed</span>';
+        // Stored does not mean indexed: legacy .doc and other unsupported formats
+        // remain downloadable but cannot be used as Plant Data evidence.
+        status.innerHTML = '<span class="notice">✓ File stored securely — not indexed for Plant Data search. Convert to a text-based PDF or DOCX and upload again to make its contents searchable.</span>';
       }
 
       if (!options.suppressReload) {
