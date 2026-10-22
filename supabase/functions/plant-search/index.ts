@@ -56,6 +56,34 @@ function queryAliases(q:string, scope:string) {
   return [...out].filter(Boolean);
 }
 
+
+function sourceEvidenceExcerpt(question:string, answerLines:string[], raw:string, scope:string):string {
+  // Extract citation from original line boundaries, not flattened context.
+  const lines=String(raw||"").replace(/\r/g,"").split("\n")
+    .map(s=>s.trim()).filter(s=>s && s!=="|" && !/^\[\[PAGE\s/i.test(s));
+  const stem=(w:string)=>w.length>4&&/s$/.test(w)&&!/(ss|us)$/.test(w)?w.slice(0,-1):w;
+  const words=(s:string)=>norm(s).split(/[^a-z0-9.]+/).filter(Boolean).map(stem);
+  const wanted=[...new Set(tokens(question).map(stem))];
+  if(!wanted.length)return "";
+  const required=Math.max(1,Math.ceil(wanted.length*.67));
+  const numbers=[...new Set(answerLines.join(" ").match(/\b\d[\d,]*(?:\.\d+)?\b/g)||[])].map(n=>n.replace(/,/g,""));
+  const scopeWords=[...new Set(tokens(scope).map(stem))];
+  let best:{score:number,excerpt:string}|null=null;
+  for(let i=0;i<lines.length;i++){
+    const label=lines[i];
+    const labelWords=new Set(words(label));
+    const hits=wanted.filter(w=>labelWords.has(w)).length;
+    if(hits<required)continue;
+    const nearby=lines.slice(i,i+5).join(" ").replace(/,/g,"");
+    const numericHits=numbers.filter(n=>new RegExp("(^|[^0-9.])"+n.replace(/\./g,"\\.")+"(?![0-9.])").test(nearby)).length;
+    if(numbers.length&&!numericHits)continue;
+    const scopeHits=scopeWords.filter(w=>labelWords.has(w)).length;
+    const score=hits*30+numericHits*32+scopeHits*18+(hits===wanted.length&&hits>1?25:0);
+    if(!best||score>best.score)best={score,excerpt:lines.slice(i,i+5).join(" | ").slice(0,450)};
+  }
+  return best?.excerpt||"";
+}
+
 function isBarePlantLookup(q:string) {
   const n = norm(q);
   if (!n) return false;
@@ -621,7 +649,8 @@ Deno.serve(async (req) => {
             document_type:d.document_type,
             page:p.page,
             offset:window.offset,
-            text:text.slice(0, 3400)
+            text:text.slice(0, 3400),
+            source_raw:window.text.slice(0, 3400)
           });
         }
       }
@@ -802,18 +831,8 @@ source_indices must contain only the source numbers that directly support the an
         file_name:x.file_name,
         page:x.page,
         page_end:x.page_end || x.page,
-        // Verbatim supporting window excerpt, for in-app source navigation.
-        evidence_excerpt:(() => {
-          const lines=String(x.text||"").split(/\n+/).map((v:string)=>v.trim()).filter(Boolean);
-          const queryWords=tokens(question);
-          const answerNumbers=answerLinesSafe.join(" ").match(/\b\d+(?:\.\d+)?\b/g)||[];
-          const ranked=lines.map((line:string)=>({
-            line,score:queryWords.filter(w=>norm(line).includes(w)).length*5+
-              answerNumbers.filter((n:string)=>line.includes(n)).length*14
-          })).sort((a,b)=>b.score-a.score);
-          const best=ranked[0];
-          return (best&&best.score>0?best.line:String(x.text||"").slice(0,350)).slice(0,500);
-        })()
+        // Blank means no reliable anchor; never use an arbitrary prefix.
+        evidence_excerpt:sourceEvidenceExcerpt(question,answerLinesSafe,x.source_raw||"",scope)
       }));
 
     const answerLines = answerLinesSafe;
