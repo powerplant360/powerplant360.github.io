@@ -257,16 +257,24 @@ function answerHistoryKey(){return 'pp360-session-answers:'+String(window.pp360S
 function readAnswerHistory(){try{const v=JSON.parse(sessionStorage.getItem(answerHistoryKey())||'{}');return v&&typeof v==='object'&&!Array.isArray(v)?v:{};}catch(_){return {};}}
 function writeAnswerHistory(data){try{sessionStorage.setItem(answerHistoryKey(),JSON.stringify(data));}catch(_){/* storage unavailable */}}
 function removeAnswerHistory(terms){const saved=readAnswerHistory();terms.forEach(t=>delete saved[norm(t)]);writeAnswerHistory(saved);}
-window.pp360RememberSearchAnswer=function(query){
- if(!window.pp360SignedIn || !query)return;
+window.pp360RememberSearchAnswer=function(query,payload){
+ if(!window.pp360SignedIn || !window.pp360SearchUserId || !query)return;
  const view=document.getElementById('view');
  const answer=view?.querySelector('.result');
  if(!answer)return;
  const copy=answer.cloneNode(true);
  copy.querySelectorAll('button, input, select, textarea, .result-actions, .actions').forEach(el=>el.remove());
- const plain=(copy.innerText||copy.textContent||'').replace(/\s+/g,' ').trim().slice(0,12000);
+ const plain=(copy.textContent||'').replace(/\s+/g,' ').trim().slice(0,12000);
  if(!plain)return;
- const saved=readAnswerHistory();saved[norm(query)]={answer:plain,when:new Date().toISOString()};
+ const lines=Array.isArray(payload?.answer_lines)
+   ? payload.answer_lines.filter(x=>typeof x==='string').slice(0,25).map(x=>x.trim().slice(0,500))
+   : [];
+ const sources=Array.isArray(payload?.sources)
+   ? payload.sources.slice(0,3).filter(x=>/^[a-f0-9-]{36}$/i.test(String(x?.document_id||'')))
+       .map(x=>({document_id:x.document_id,file_name:String(x.file_name||'').slice(0,180),page:Number.isInteger(Number(x.page))&&Number(x.page)>0?Number(x.page):null}))
+   : [];
+ const saved=readAnswerHistory();
+ saved[norm(query)]={answer:plain,lines,sources,when:new Date().toISOString()};
  const keep=new Set(history.map(norm));
  Object.keys(saved).forEach(k=>{if(!keep.has(k))delete saved[k];});
  writeAnswerHistory(saved);
@@ -274,7 +282,7 @@ window.pp360RememberSearchAnswer=function(query){
 function renderSearchHistory(){
  const view=document.getElementById('view');if(!view)return;
  const saved=readAnswerHistory();
- view.innerHTML=`<section class='card search-history-panel'><div class='history-top'><div><h2>Search History</h2><p class='muted'>View questions and saved answers. Answer previews are kept only for this signed-in browser session.</p></div><div class='history-actions'><button type='button' id='historySelectAll' ${history.length?'':'disabled'}>Select All</button><button type='button' id='historyDeleteSelected' disabled>Delete Selected</button><button type='button' id='historyClearAll' ${history.length?'':'disabled'}>Clear All</button></div></div><p class='history-status' id='historySelectionStatus' role='status'>0 selected</p><div class='history-list'>${history.length?history.map((q,i)=>{const a=saved[norm(q)];return `<article class='history-entry'><label class='history-check'><input type='checkbox' data-history-check='${i}' aria-label='Select ${esc(q)}'></label><div class='history-entry-content'><details><summary><span class='history-question'>${esc(q)}</span><span class='history-answer-status'>${a?'Answer saved':'Answer not saved'}</span></summary><div class='history-answer'>${a?`<p>${esc(a.answer)}</p><small class='muted'>Saved ${esc(new Date(a.when).toLocaleString())} · Browser session only</small>`:'<p class="muted">An earlier answer is not available in this session. Search again to generate a new answer.</p>'}<button type='button' data-history-search='${i}'>Search Again →</button></div></details></div><button type='button' class='history-delete-one' data-history-delete='${i}' aria-label='Delete ${esc(q)}'>Delete</button></article>`;}).join(''):'<p class="muted">No searches yet.</p>'}</div></section>`;
+ view.innerHTML=`<section class='card search-history-panel'><div class='history-top'><div><h2>Search History</h2><p class='muted'>View questions and saved answers. Answer previews are kept only for this signed-in browser session.</p></div><div class='history-actions'><button type='button' id='historySelectAll' ${history.length?'':'disabled'}>Select All</button><button type='button' id='historyDeleteSelected' disabled>Delete Selected</button><button type='button' id='historyClearAll' ${history.length?'':'disabled'}>Clear All</button></div></div><p class='history-status' id='historySelectionStatus' role='status'>0 selected</p><div class='history-list'>${history.length?history.map((q,i)=>{const a=saved[norm(q)];return `<article class='history-entry'><label class='history-check'><input type='checkbox' data-history-check='${i}' aria-label='Select ${esc(q)}'></label><div class='history-entry-content'><details><summary><span class='history-question'>${esc(q)}</span><span class='history-answer-status'>${a?'Answer saved':'Answer not saved'}</span></summary><div class='history-answer'>${a?`${Array.isArray(a.lines)&&a.lines.length?`<div class='history-answer-lines'>${a.lines.map(line=>`<p>${esc(line)}</p>`).join('')}</div>`:`<p>${esc(a.answer)}</p>`}${Array.isArray(a.sources)?a.sources.map((src,j)=>`<button type='button' data-history-source='${i}:${j}'>${esc(/\.(xlsx|xls|csv)$/i.test(src.file_name)?'View supporting spreadsheet':'View supporting document'+(src.page?' · Page '+src.page:''))}</button>`).join(''):''}<small class='muted'>Saved ${esc(new Date(a.when).toLocaleString())} · Browser session only</small>`:'<p class="muted">An earlier answer is not available in this session. Search again to generate a new answer.</p>'}<button type='button' data-history-search='${i}'>Search Again →</button></div></details></div><button type='button' class='history-delete-one' data-history-delete='${i}' aria-label='Delete ${esc(q)}'>Delete</button></article>`;}).join(''):'<p class="muted">No searches yet.</p>'}</div></section>`;
  const checkboxes=Array.from(view.querySelectorAll('[data-history-check]'));
  const selected=()=>checkboxes.filter(c=>c.checked).map(c=>history[Number(c.dataset.historyCheck)]).filter(Boolean);
  const update=()=>{const count=selected().length;view.querySelector('#historySelectionStatus').textContent=count+' selected';view.querySelector('#historyDeleteSelected').disabled=!count;view.querySelector('#historySelectAll').textContent=count===history.length&&count?'Deselect All':'Select All';};
@@ -285,6 +293,14 @@ function renderSearchHistory(){
  view.querySelector('#historyClearAll').addEventListener('click',()=>deleteTerms(history.slice()));
  view.querySelectorAll('[data-history-delete]').forEach(b=>b.addEventListener('click',()=>deleteTerms([history[Number(b.dataset.historyDelete)]])));
  view.querySelectorAll('[data-history-search]').forEach(b=>b.addEventListener('click',()=>searchTerm(history[Number(b.dataset.historySearch)])));
+ view.querySelectorAll('[data-history-source]').forEach(b=>b.addEventListener('click',()=>{
+  if(!window.pp360SignedIn || !window.pp360SearchUserId || typeof window.viewDocument!=='function')return;
+  const [i,j]=String(b.dataset.historySource||'').split(':').map(Number);
+  const src=readAnswerHistory()[norm(history[i]||'')]?.sources?.[j];
+  if(src && /^[a-f0-9-]{36}$/i.test(String(src.document_id||''))){
+    window.viewDocument(src.document_id,src.page||undefined);
+  }
+ }));
 }
 
 
