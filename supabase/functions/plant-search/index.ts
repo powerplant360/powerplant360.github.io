@@ -540,7 +540,22 @@ Deno.serve(async (req) => {
     }
 
     // Prefer exact reservoir spreadsheet rows over fuzzy text search or AI inference.
-    const reservoirRow = exactReservoirCapacity(question, docs);
+    const isNumericReservoir = /\b(reservoir|water tank|storage tank)\b/.test(norm(question)) &&
+      /\b\d+(?:\.\d+)?\s*(?:mtr|meter|metre|meters|metres|m)\b/.test(norm(question));
+    let reservoirDocs = docs;
+    if (isNumericReservoir) {
+      const { data: spreadsheetDocs, error: spreadsheetError } = await supabase
+        .from("documents")
+        .select("id,file_name,category,extracted_text")
+        .eq("processing_status", "ready")
+        .eq("category", scope)
+        .ilike("file_name", "%reservoir%")
+        .not("extracted_text", "is", null)
+        .limit(15);
+      if (spreadsheetError) throw spreadsheetError;
+      reservoirDocs = spreadsheetDocs || docs;
+    }
+    const reservoirRow = exactReservoirCapacity(question, reservoirDocs);
     if (reservoirRow) {
       await recordUsage(null, "plant", scope);
       return new Response(JSON.stringify({ ...reservoirRow, scope }), {
