@@ -2039,3 +2039,57 @@ body.dark .paste-upload-hint,html.dark .paste-upload-hint,[data-theme="dark"] .p
 .pp360-document-find input{flex:1;min-width:160px;max-width:430px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink);padding:8px 10px;font:inherit}
 .pp360-word-line{margin:0 0 12px;white-space:pre-wrap;overflow-wrap:anywhere}
 .pp360-evidence-match{background:rgba(253,224,71,.24);border-left:4px solid #eab308;padding:5px 8px;margin:2px 0 12px;border-radius:4px;color:var(--ink)}
+
+
+/* PowerPlant360 shared header: left brand, centered plant identity, right controls + IST clock. */
+header:has(#headerClock){
+  display:grid;
+  grid-template-columns:minmax(190px,1fr) minmax(270px,1.5fr) auto minmax(125px,.45fr);
+  align-items:center;
+  gap:clamp(12px,1.5vw,30px);
+  padding:12px clamp(16px,2vw,38px);
+  width:100%;
+  max-width:100%;
+}
+header:has(#headerClock) .brand-block{justify-self:start;flex:none;min-width:0;overflow:visible}
+header:has(#headerClock) .plant-identity{
+  justify-self:center;
+  width:100%;
+  max-width:100%;
+  margin:0;
+  text-align:center;
+  min-width:0;
+}
+header:has(#headerClock) .plant-identity strong{font-size:clamp(.8rem,1.1vw,1.12rem)}
+header:has(#headerClock) .plant-identity small{display:block;font-size:.75rem}
+header:has(#headerClock) .header-actions{justify-self:end;flex:0 0 auto}
+.header-clock{justify-self:end;display:flex;flex-direction:column;align-items:flex-end;white-space:nowrap;gap:2px;color:#fff;font-variant-numeric:tabular-nums}
+.header-clock span{font-size:.75rem;opacity:.84}
+.header-clock strong{font-size:.96rem;line-height:1.15}
+.header-clock small{font-size:.64rem;letter-spacing:.08em;opacity:.76}
+body.auth-locked .header-clock,body.auth-checking .header-clock{display:none}
+@media(max-width:1150px){
+  header:has(#headerClock){grid-template-columns:minmax(150px,1fr) minmax(180px,1.4fr) auto auto;gap:10px;padding-inline:12px}
+  header:has(#headerClock) .plant-identity strong{font-size:.83rem}
+  .header-clock strong{font-size:.82rem}
+}
+@media(max-width:850px){
+  header:has(#headerClock){grid-template-columns:auto minmax(100px,1fr) auto;gap:8px}
+  header:has(#headerClock) .mobile-menu-btn{grid-column:1}
+  header:has(#headerClock) .brand-block{grid-column:2}
+  header:has(#headerClock) .header-actions{grid-column:3}
+  header:has(#headerClock) .plant-identity{grid-column:2;grid-row:2;position:static;max-width:100%;background:transparent;padding:3px 0}
+  header:has(#headerClock) .header-clock{grid-column:3;grid-row:2;position:static;padding:2px 0}
+  header:has(#headerClock) .plant-identity strong{font-size:.76rem}
+  header:has(#headerClock) .plant-identity small{font-size:.65rem}
+}
+@media(max-width:600px){
+  header:has(#headerClock){grid-template-columns:auto minmax(0,1fr) auto;row-gap:5px}
+  header:has(#headerClock) .plant-identity{grid-column:1 / 3;grid-row:2;text-align:left;align-items:flex-start;max-width:none}
+  header:has(#headerClock) .plant-identity small{display:block}
+  header:has(#headerClock) .header-clock{grid-column:3;grid-row:2}
+  header:has(#headerClock) .header-actions{gap:5px}
+  header:has(#headerClock) .brand-block{overflow:hidden}
+  .header-clock span{font-size:.64rem}
+  .header-clock strong{font-size:.72rem}
+}
