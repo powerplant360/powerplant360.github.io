@@ -2025,3 +2025,9 @@ body.dark .paste-upload-hint,html.dark .paste-upload-hint,[data-theme="dark"] .p
 .pp360-index-auto{padding:10px 12px;margin:10px 0 16px;border:1px solid var(--line);border-radius:10px}
 .pp360-index-auto p{margin:8px 0 0}
 .pp360-index-status{padding-top:10px;min-height:22px;overflow-wrap:anywhere}
+
+/* Shared evidence navigation: source links open near the matching indexed passage. */
+.pp360-document-find{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 10px}
+.pp360-document-find input{flex:1;min-width:160px;max-width:430px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink);padding:8px 10px;font:inherit}
+.pp360-word-line{margin:0 0 12px;white-space:pre-wrap;overflow-wrap:anywhere}
+.pp360-evidence-match{background:rgba(253,224,71,.24);border-left:4px solid #eab308;padding:5px 8px;margin:2px 0 12px;border-radius:4px;color:var(--ink)}
