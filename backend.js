@@ -4241,30 +4241,32 @@
       }
       if(best)matches.push({i,score:best});
     }
-    // When a source answer spans many lines (trip/permissive lists), locate
-    // its named section heading. Do not invent an exact per-row citation.
+    // Shared, data-derived equipment section fallback — no department whitelist.
     if(!matches.length){
-      const aliases=[
-        {test:/\bbfp\b|boiler feed pump/i,words:['boiler','feed','pump']},
-        {test:/\bid fan\b|induced draft fan/i,words:['id','fan']},
-        {test:/\bpa fan\b|primary air fan/i,words:['pa','fan']},
-        {test:/\bsa fan\b|secondary air fan/i,words:['sa','fan']},
-        {test:/\bacc\b|air cooled condenser/i,words:['air','cooled','condenser']}
-      ];
-      const key=aliases.find(a=>a.test.test(query));
-      if(key){
-        for(let i=0;i<blocks.length;i++){
-          const line=String(blocks[i]||'');
-          const words=new Set(pp360FocusWords(line));
-          if(!key.words.every(w=>words.has(w)))continue;
-          // Only section labels, not casual references scattered in a table.
-          if(line.length>130||!/[:()]|(?:pump|fan)s?\s*[-–]?\s*\d/i.test(line))continue;
-          const context=blocks.slice(i+1,i+10).join(' ').toLowerCase();
-          if(!/\btrip\b|\binterlock\b|\bstart\b|\bpermissive\b/.test(context))continue;
-          matches.push({i,score:500,section:true});
-          break;
-        }
+      const ignore=new Set([...isGeneric,'data','details','information','about','equipment','system','section','operation','procedure','protection','start','stop','auto','manual','permissives','permissive']);
+      const queryTerms=focusWords.filter(w=>!ignore.has(w));
+      const answerTerms=answerLines.flatMap(v=>pp360FocusWords(String(v).split(':')[0])).filter(w=>!ignore.has(w));
+      const requested=[...new Set([...queryTerms,...answerTerms])];
+      const candidates=[];
+      for(let i=0;i<blocks.length;i++){
+        const heading=String(blocks[i]||'').trim();
+        if(!heading||heading.length>115||heading.includes('|'))continue;
+        if(!(/[:：]\s*$/.test(heading)||/[-(]\s*\d/.test(heading)||/^[A-Z0-9\s/&()+._-]+$/.test(heading)))continue;
+        const headingWords=pp360FocusWords(heading).filter(w=>!ignore.has(w));
+        if(headingWords.length<2||headingWords.length>12)continue;
+        const singular=headingWords.map(w=>w.endsWith('s')&&w.length>4?w.slice(0,-1):w);
+        const acronym=singular.map(w=>w[0]).join('');
+        const overlap=requested.filter(w=>singular.includes(w)).length;
+        const acronymHit=queryTerms.some(w=>w.length>=2&&(acronym===w||acronym.startsWith(w)));
+        if(!acronymHit&&!overlap)continue;
+        const contextWords=new Set(pp360FocusWords(blocks.slice(i+1,i+12).join(' ')));
+        const actionTerms=focusWords.filter(w=>ignore.has(w)||isGeneric.has(w));
+        const supported=actionTerms.some(w=>contextWords.has(w))||answerTerms.some(w=>contextWords.has(w));
+        if(!supported)continue;
+        candidates.push({i,score:(acronymHit?130:0)+overlap*32+16});
       }
+      candidates.sort((a,b)=>b.score-a.score||a.i-b.i);
+      if(candidates.length)matches.push(candidates[0]);
     }
     matches.sort((a,b)=>b.score-a.score||a.i-b.i);
     if(!matches.length)return [];
@@ -4318,8 +4320,8 @@
       ? (indexes.length?(/bearing/i.test(focus.query||'') && /\bshaft\b/i.test(String((focus.answerLines||[])[0]||'')) &&
           indexes.some(i=>/\bshaft\b/i.test(blocks[i]) && !/\bbearing\b/i.test(blocks[i]))
           ? 'Related shaft-vibration passage; bearing limit NOT verified'
-          : (/\bboiler feed pump/i.test(String(blocks[indexes[0]]||''))&&/\bbfp\b/i.test(focus.query||'')
-          ?'BFP section located. Verify each condition against its source row.'
+          : (/[:：]\s*$|[-(]\s*\d/.test(String(blocks[indexes[0]]||''))
+          ?'Equipment section located. Verify each condition against its source row.'
           :indexes.length+' closest text match'+(indexes.length===1?'':'es')+' highlighted')):
           'Exact supporting passage could not be located. Try Find or inspect the document.')
       :'';
