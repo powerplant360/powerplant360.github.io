@@ -4318,7 +4318,9 @@
       ? (indexes.length?(/bearing/i.test(focus.query||'') && /\bshaft\b/i.test(String((focus.answerLines||[])[0]||'')) &&
           indexes.some(i=>/\bshaft\b/i.test(blocks[i]) && !/\bbearing\b/i.test(blocks[i]))
           ? 'Related shaft-vibration passage; bearing limit NOT verified'
-          : indexes.length+' closest text match'+(indexes.length===1?'':'es')+' highlighted'):
+          : (/\bboiler feed pump/i.test(String(blocks[indexes[0]]||''))&&/\bbfp\b/i.test(focus.query||'')
+          ?'BFP section located. Verify each condition against its source row.'
+          :indexes.length+' closest text match'+(indexes.length===1?'':'es')+' highlighted')):
           'Exact supporting passage could not be located. Try Find or inspect the document.')
       :'';
     if(focusNode){
