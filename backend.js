@@ -3929,6 +3929,138 @@
     }
   }
 
+
+  // Centralized secure in-app viewer for all document entry points.
+  let pp360UniversalState=null;
+  function closeUniversalPreview(){
+    if(pp360UniversalState?.url)URL.revokeObjectURL(pp360UniversalState.url);
+    try{pp360UniversalState?.pdf?.destroy()}catch(_){}
+    pp360UniversalState=null;
+    document.getElementById('pp360UniversalModal')?.remove();
+  }
+  window.closeUniversalPreview=closeUniversalPreview;
+  async function downloadOriginalDocument(id){
+    const d=docs.find(x=>String(x.id)===String(id))||
+      (await client().from('documents').select('id,file_name,storage_path').eq('id',id).single()).data;
+    if(!d)return alert('Document not found.');
+    const {data,error}=await client().storage.from('plant-documents').download(d.storage_path);
+    if(error||!data)return alert('Download failed: '+(error?.message||'File unavailable'));
+    pp360DownloadBlob(d.file_name||'document',data);
+  }
+  window.downloadOriginalDocument=downloadOriginalDocument;
+  async function pp360RenderPdfPage(num){
+    const state=pp360UniversalState;
+    if(!state?.pdf)return;
+    const number=Math.max(1,Math.min(state.pdf.numPages,Math.floor(Number(num)||1)));
+    const body=document.getElementById('pp360UniversalBody');
+    if(!body)return;
+    const token=++state.token;
+    const page=await state.pdf.getPage(number);
+    if(state!==pp360UniversalState||token!==state.token)return;
+    const native=page.getViewport({scale:1});
+    const scale=Math.min(2,Math.max(.5,(body.clientWidth-36)/native.width));
+    const viewport=page.getViewport({scale});
+    const canvas=document.createElement('canvas');
+    canvas.width=Math.ceil(viewport.width);canvas.height=Math.ceil(viewport.height);
+    canvas.className='pp360-universal-canvas';
+    body.replaceChildren(canvas);
+    await page.render({canvasContext:canvas.getContext('2d'),viewport}).promise;
+    state.page=number;
+    document.getElementById('pp360UniversalPage').textContent='Page '+number+' of '+state.pdf.numPages;
+    document.getElementById('pp360UniversalPrev').disabled=number<=1;
+    document.getElementById('pp360UniversalNext').disabled=number>=state.pdf.numPages;
+  }
+  window.pp360UniversalPageStep=step=>pp360RenderPdfPage((pp360UniversalState?.page||1)+step)
+    .catch(e=>{const b=document.getElementById('pp360UniversalBody');if(b)b.textContent='Page error: '+e.message});
+  async function previewUniversalDocument(d,page){
+    closeUniversalPreview();
+    const fileName=String(d.file_name||'Document');
+    const ext=fileName.split('.').pop().toLowerCase();
+    document.body.insertAdjacentHTML('beforeend',
+      '<div class="modalback" id="pp360UniversalModal" role="dialog" aria-modal="true">'+
+      '<div class="pp360-word-modal"><div class="spreadsheet-preview-head">'+
+      '<div><h3>Document Preview</h3><div class="muted small">'+esc(fileName)+'</div></div>'+
+      '<div class="actions"><button id="pp360UniversalDownload">Download Original</button>'+
+      '<button onclick="closeUniversalPreview()">Close</button></div></div>'+
+      '<div class="muted small" id="pp360UniversalInfo">Opening securely…</div>'+
+      '<div class="pp360-universal-controls" id="pp360UniversalControls" hidden>'+
+      '<button id="pp360UniversalPrev" onclick="pp360UniversalPageStep(-1)">Previous</button>'+
+      '<span id="pp360UniversalPage"></span>'+
+      '<button id="pp360UniversalNext" onclick="pp360UniversalPageStep(1)">Next</button></div>'+
+      '<div class="pp360-word-body pp360-universal-body" id="pp360UniversalBody">Loading…</div></div></div>');
+    document.getElementById('pp360UniversalDownload').onclick=()=>downloadOriginalDocument(d.id);
+    const body=document.getElementById('pp360UniversalBody');
+    const info=document.getElementById('pp360UniversalInfo');
+    const state={pdf:null,url:null,page:1,token:0};
+    pp360UniversalState=state;
+    try{
+      if(['doc','ppt','odt','ods','odp'].includes(ext)){
+        info.textContent='Legacy format — preview unavailable';
+        body.textContent='This file is safely stored, but its format requires a compatible application. Convert to DOCX, PPTX or PDF, or use Download Original.';
+        return;
+      }
+      const {data:blob,error}=await client().storage.from('plant-documents').download(d.storage_path);
+      if(error||!blob)throw error||new Error('File unavailable');
+      if(state!==pp360UniversalState)return;
+      const mime=String(d.mime_type||blob.type||'').toLowerCase();
+      if(ext==='pdf'||mime.includes('application/pdf')){
+        if(!window.pdfjsLib)throw new Error('PDF library unavailable');
+        state.pdf=await pdfjsLib.getDocument({data:new Uint8Array(await blob.arrayBuffer())}).promise;
+        if(state!==pp360UniversalState)return;
+        info.textContent='PDF · '+state.pdf.numPages+' pages';
+        document.getElementById('pp360UniversalControls').hidden=false;
+        await pp360RenderPdfPage(page||1);
+      }else if(['png','jpg','jpeg','gif','webp','bmp'].includes(ext)||mime.startsWith('image/')){
+        if(ext==='svg'||mime.includes('svg')){
+          body.textContent=await blob.text();info.textContent='SVG source (not executed)';
+        }else{
+          state.url=URL.createObjectURL(blob);
+          const img=document.createElement('img');img.src=state.url;img.alt=fileName;
+          img.className='pp360-universal-image';body.replaceChildren(img);
+          info.textContent='Image';
+        }
+      }else if(['txt','log','md','json','xml','html','htm','css','js','sql','yaml','yml','ini','rtf','tsv','svg'].includes(ext)||mime.startsWith('text/')){
+        const value=await blob.text();
+        body.textContent=value.slice(0,1500000)+(value.length>1500000?'\n[Preview truncated]':'');
+        info.textContent='Text preview · scripts disabled';
+      }else if(ext==='pptx'){
+        if(!window.JSZip)throw new Error('Office preview library unavailable');
+        const zip=await JSZip.loadAsync(await blob.arrayBuffer());
+        const names=Object.keys(zip.files).filter(n=>/^ppt\/slides\/slide\d+\.xml$/.test(n))
+          .sort((a,b)=>Number(a.match(/slide(\d+)/)[1])-Number(b.match(/slide(\d+)/)[1]));
+        const lines=[];
+        for(const name of names.slice(0,150)){
+          const xml=new DOMParser().parseFromString(await zip.file(name).async('string'),'application/xml');
+          const values=Array.from(xml.getElementsByTagNameNS('http://schemas.openxmlformats.org/drawingml/2006/main','t'))
+            .map(el=>el.textContent||'');
+          lines.push('SLIDE '+(lines.length+1)+'\n'+values.join('\n'));
+        }
+        body.textContent=lines.join('\n\n')||'No readable slide text';
+        info.textContent='PowerPoint text preview · layout/images omitted';
+      }else if(ext==='zip'){
+        if(!window.JSZip)throw new Error('ZIP library unavailable');
+        const zip=await JSZip.loadAsync(await blob.arrayBuffer());
+        const names=Object.keys(zip.files);
+        body.textContent=names.slice(0,1000).join('\n')+(names.length>1000?'\n[More entries omitted]':'');
+        info.textContent='ZIP contents · '+names.length+' entries';
+      }else if(['mp3','wav','ogg','m4a','mp4','webm'].includes(ext)||mime.startsWith('audio/')||mime.startsWith('video/')){
+        state.url=URL.createObjectURL(blob);
+        const video=mime.startsWith('video/')||['mp4','webm'].includes(ext);
+        const media=document.createElement(video?'video':'audio');
+        media.controls=true;media.src=state.url;media.className='pp360-universal-media';
+        body.replaceChildren(media);info.textContent='Media';
+      }else{
+        info.textContent='No inline renderer for this format';
+        body.textContent='This file is safely stored. Use Download Original to open it in a compatible application.';
+      }
+    }catch(err){
+      if(state===pp360UniversalState){
+        info.textContent='Preview unavailable';
+        body.textContent='Could not preview: '+(err?.message||String(err))+'. Use Download Original if needed.';
+      }
+    }
+  }
+
   async function viewDocument(id, page=null) {
     let d = docs.find(x => x.id === id);
 
@@ -3956,41 +4088,8 @@
       return;
     }
 
-    if (isPdfDocument(d)) {
-      const pageNum = Number(page);
-      const pageText = Number.isFinite(pageNum) && pageNum > 0
-        ? ' at Page ' + Math.floor(pageNum)
-        : '';
+    await previewUniversalDocument(d,page);
 
-      if (isVisionIndexedPdfPage(d,pageNum)) {
-        const ok = confirm('Preview supporting PDF' + pageText + ' as an image?');
-        if (!ok) return;
-        await previewVisionPdfPage(d,pageNum);
-        return;
-      }
-
-      const ok = confirm('Open supporting PDF' + pageText + '?');
-      if (!ok) return;
-    }
-
-    const { data, error } = await client().storage
-      .from('plant-documents')
-      .createSignedUrl(d.storage_path, 600);
-
-    if (error || !data?.signedUrl) {
-      alert('Could not open document: ' + (error?.message || 'Signed link was not created.'));
-      return;
-    }
-
-    const pageNum = Number(page);
-    const targetUrl = Number.isFinite(pageNum) && pageNum > 0
-      ? data.signedUrl + '#page=' + Math.floor(pageNum)
-      : data.signedUrl;
-
-    const w = window.open(targetUrl, '_blank');
-    if (!w) {
-      window.location.href = targetUrl;
-    }
   }
 
   window.viewDocument = viewDocument;
