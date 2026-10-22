@@ -6,6 +6,7 @@
   }
   let backendSession = null;
   let backendRole = null;
+  let initialRefreshFeedbackShown = false;
   let passwordRecoveryMode = /(?:[?#&])type=recovery(?:&|$)/i.test(window.location.href);
 
   function backendConfigured() {
@@ -213,7 +214,8 @@
     const refreshBtn = document.getElementById('refreshBtn');
     const refreshed = sessionStorage.getItem('pp360:refresh-pending') === '1' ||
       performance.getEntriesByType('navigation')[0]?.type === 'reload';
-    if (refreshBtn && refreshed) {
+    if (refreshBtn && refreshed && !initialRefreshFeedbackShown) {
+      initialRefreshFeedbackShown = true;
       try { sessionStorage.removeItem('pp360:refresh-pending'); } catch (_) {}
       refreshBtn.classList.remove('refreshing');
       refreshBtn.classList.add('refresh-ready');
