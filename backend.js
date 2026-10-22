@@ -3902,8 +3902,8 @@
           const el=walker.currentNode;
           if(el.namespaceURI!==ns)continue;
           if(el.localName==='t'||el.localName==='delText')out+=el.textContent||'';
-          else if(el.localName==='tab')out+='\\t';
-          else if(el.localName==='br'||el.localName==='cr')out+='\\n';
+          else if(el.localName==='tab')out+='\t';
+          else if(el.localName==='br'||el.localName==='cr')out+='\n';
         }
         return out.trim();
       }
@@ -3922,7 +3922,7 @@
           blocks.push('');
         }
       }
-      target.textContent=blocks.join('\\n\\n').trim()||'No readable text found in this document.';
+      target.textContent=blocks.join('\n\n').trim()||'No readable text found in this document.';
     }catch(err){
       target.textContent='Preview unavailable: '+(err?.message||String(err))+
         '. You can download the original file from secure storage if needed.';
