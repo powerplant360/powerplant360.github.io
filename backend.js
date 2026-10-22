@@ -3763,25 +3763,31 @@
     return norm(raw).split(' ').filter(x => x.length >= 2 && !['what','is','the','of','for','show','give','please','data','details','detail'].includes(x));
   }
 
-  function scoreSpreadsheetRows(rows, sheetName, queryTokens) {
-    if (!queryTokens.length) return { score:0, matchRow:-1 };
-    let bestScore = 0;
-    let bestRow = -1;
-    const sheetNorm = norm(sheetName || '');
-    for (let r=0; r<rows.length; r++) {
-      const rowNorm = norm((rows[r] || []).join(' '));
-      let score = 0;
-      for (const t of queryTokens) {
-        if (rowNorm.includes(t)) score += 4;
-        if (sheetNorm.includes(t)) score += 2;
-      }
-      if (queryTokens.every(t => rowNorm.includes(t))) score += 12;
-      if (score > bestScore) {
-        bestScore = score;
-        bestRow = r;
-      }
+  function scoreSpreadsheetRows(rows,sheetName,queryTokens,focus=null) {
+    if(!focus)return {score:0,matchRow:-1};
+    const queryNums=pp360FocusNumbers(focus.query||'');
+    const answerNums=pp360FocusNumbers((focus.answerLines||[]).join(' '));
+    const queryWords=pp360FocusWords(focus.query||'');
+    let bestScore=0,bestRow=-1;
+    for(let r=0;r<rows.length;r++){
+      const text=(rows[r]||[]).join(' ');
+      const numericText=text.replace(/,/g,'');
+      const hasNum=n=>new RegExp('(^|[^0-9.])'+n.replace(/\./g,'\\.')+'(?![0-9.])').test(numericText);
+      const qHits=queryNums.filter(hasNum).length;
+      const aHits=answerNums.filter(hasNum).length;
+      // The selected depth/condition and returned number must occur in
+      // the candidate row. Other rows are not supporting evidence.
+      if(queryNums.length&&!qHits)continue;
+      if(answerNums.length&&!aHits)continue;
+      const rowWords=new Set(pp360FocusWords(text+' '+sheetName));
+      const wordHits=queryWords.filter(w=>rowWords.has(w)).length;
+      if(!queryNums.length&&!answerNums.length&&queryWords.length&&
+        wordHits<Math.max(1,Math.ceil(queryWords.length*.5)))continue;
+      const score=qHits*90+aHits*85+wordHits*10+
+        pp360FocusWords(focus.excerpt||'').filter(w=>rowWords.has(w)).length*4;
+      if(score>bestScore){bestScore=score;bestRow=r;}
     }
-    return { score:bestScore, matchRow:bestRow };
+    return {score:bestScore,matchRow:bestRow};
   }
 
   function closeSpreadsheetPreview() {
@@ -3819,13 +3825,13 @@
       const absoluteRow = start + i;
       const row = visible[i] || [];
       const rowText = norm(row.join(' '));
-      const rowMatch = tokens.length && tokens.some(t => rowText.includes(t));
+      const rowMatch = matchRow === absoluteRow;
       html += '<tr' + (rowMatch ? ' class="sheet-match-row"' : '') + '>';
       html += '<th class="sheet-rownum">' + (absoluteRow + 1) + '</th>';
       for (let c=0; c<maxCols; c++) {
         const val = row[c] == null ? '' : String(row[c]);
         const cellNorm = norm(val);
-        const cellMatch = tokens.length && tokens.some(t => cellNorm.includes(t));
+        const cellMatch = rowMatch && tokens.length && tokens.some(t => cellNorm.includes(t));
         html += '<td' + (cellMatch ? ' class="sheet-match-cell"' : '') + '>' + esc(val) + '</td>';
       }
       html += '</tr>';
@@ -3835,7 +3841,7 @@
     body.innerHTML = html || '<div class="notice">This worksheet has no visible cell data.</div>';
 
     if (meta) {
-      const matchText = matchRow >= 0 ? ' • closest match around row ' + (matchRow + 1) : '';
+      const matchText = matchRow >= 0 ? ' • closest matching row ' + (matchRow + 1) : (state.focus ? ' • no supported matching row found' : '');
       const rangeText = rows.length > end-start
         ? ' • showing rows ' + (start + 1) + '–' + end + ' of ' + rows.length
         : ' • ' + rows.length + ' rows';
@@ -3906,7 +3912,7 @@
           blankrows:false
         });
         rowsBySheet[name] = rows;
-        const match = scoreSpreadsheetRows(rows,name,queryTokens);
+        const match = scoreSpreadsheetRows(rows,name,queryTokens,focus);
         matchesBySheet[name] = match;
         if (match.score > bestScore) {
           bestScore = match.score;
@@ -3919,7 +3925,8 @@
         workbook:wb,
         rowsBySheet,
         matchesBySheet,
-        queryTokens
+        queryTokens,
+        focus
       };
 
       const tabs = document.getElementById('spreadsheetSheetTabs');
@@ -4056,49 +4063,51 @@
       const answerLines=(Array.isArray(f.answerLines)?f.answerLines:[])
         .filter(x=>typeof x==='string').slice(0,15).map(x=>x.slice(0,500));
       const excerpt=String(f.evidence_excerpt||f.excerpt||'').slice(0,500);
-      return query||answerLines.length||excerpt?{query,answerLines,excerpt}:null;
+      const scope=String(f.scope||'').slice(0,90);
+      return query||answerLines.length||excerpt?{query,answerLines,excerpt,scope}:null;
     }catch(_){return null;}
   }
+
 
   function pp360FocusWords(value) {
     const stop=new Set(['the','and','any','for','with','from','this','that','what','where','when','which','have',
       'high','low','main','before','after','into','then','will','due','per','year','data','value','plant',
       'give','show','tell','does','about','some','condition','conditions','set','point','below','above']);
-    return [...new Set(String(value||'').toLowerCase()
-      .replace(/[^a-z0-9.]+/g,' ').split(/\s+/)
-      .map(x=>x.replace(/\.$/,'')).filter(x=>x.length>2&&!stop.has(x)))];
+    return [...new Set(String(value||'').toLowerCase().replace(/[^a-z0-9.]+/g,' ').split(/\s+/)
+      .map(x=>x.replace(/\.$/,'')).filter(x=>x.length>2&&!stop.has(x))
+      .map(x=>x.length>4&&/s$/.test(x)&&!/(ss|us)$/.test(x)?x.slice(0,-1):x))];
   }
-
-  function pp360FocusScore(text,focus) {
+  function pp360FocusNumbers(value) {
+    return [...new Set((String(value||'').match(/\b\d[\d,]*(?:\.\d+)?\b/g)||[]).map(x=>x.replace(/,/g,'')))];
+  }
+  function pp360FocusScore(text,focus,following='') {
     if(!focus)return 0;
-    const line=String(text||'').toLowerCase().replace(/[^a-z0-9.]+/g,' ').replace(/\s+/g,' ');
-    const questionWords=pp360FocusWords(focus.query);
-    const answer=(focus.answerLines||[]).join(' ');
-    const excerpt=String(focus.excerpt||'').toLowerCase().replace(/[^a-z0-9.]+/g,' ').replace(/\s+/g,' ').trim();
-    const excerptWords=pp360FocusWords(excerpt).filter(w=>w.length>=4);
-    const excerptHits=excerptWords.filter(w=>line.includes(w)).length;
-    const answerWords=pp360FocusWords(answer);
-    const nums=[...new Set((answer.match(/\b\d+(?:\.\d+)?\b/g)||[]).filter(x=>x.length>=2))];
-    let score=excerptHits?Math.round(55*excerptHits/Math.max(1,excerptWords.length)):0;
-    if(excerpt.length>=24 && (line.includes(excerpt)||(excerpt.includes(line.trim())&&line.trim().length>=24)))score+=130;
-    for(const word of questionWords)if(line.includes(word))score+=5;
-    for(const word of answerWords)if(line.includes(word))score+=4;
-    for(const value of nums)if(new RegExp('(^|[^0-9.])'+value.replace('.','\\.')+'(?![0-9.])').test(line))score+=26;
-    // Matching several distinctive terms in the same row beats a distant heading.
-    const shared=questionWords.filter(word=>line.includes(word)).length;
-    if(shared>=2)score+=10;
-    if(shared>=3)score+=8;
-    if(nums.length && nums.some(n=>line.includes(n))&&shared>=2)score+=14;
-    return score;
+    const labelWords=new Set(pp360FocusWords(text));
+    const queryWords=pp360FocusWords(focus.query||'');
+    const hits=queryWords.filter(w=>labelWords.has(w)).length;
+    // The actual paragraph/row must match the requested equipment/parameter.
+    // An excerpt or number from elsewhere must not override this requirement.
+    if(queryWords.length&&hits<Math.max(1,Math.ceil(queryWords.length*.67)))return 0;
+    const nums=pp360FocusNumbers((focus.answerLines||[]).join(' '));
+    const valueText=(String(text||'')+' '+String(following||'')).replace(/,/g,'');
+    const numHits=nums.filter(n=>new RegExp('(^|[^0-9.])'+n.replace(/\./g,'\\.')+'(?![0-9.])').test(valueText)).length;
+    if(nums.length&&!numHits)return 0;
+    const excerptWords=pp360FocusWords(focus.excerpt||'');
+    const excerptHits=excerptWords.filter(w=>labelWords.has(w)).length;
+    const scopeWords=pp360FocusWords(focus.scope||'');
+    const scopeHits=scopeWords.filter(w=>labelWords.has(w)).length;
+    return hits*32+numHits*40+scopeHits*14+
+      (excerptWords.length?Math.round(70*excerptHits/excerptWords.length):0)+
+      (hits===queryWords.length&&hits>1?30:0);
   }
-
-  function pp360FocusIndexes(blocks, focus) {
+  function pp360FocusIndexes(blocks,focus) {
     if(!focus||!Array.isArray(blocks)||!blocks.length)return [];
-    const ranked=blocks.map((line,i)=>({i,score:pp360FocusScore(line,focus)}))
-      .filter(x=>x.score>=18).sort((x,y)=>y.score-x.score);
+    const ranked=blocks.map((line,i)=>({
+      i,score:pp360FocusScore(line,focus,[blocks[i+1]||'',blocks[i+2]||''].join(' '))
+    })).filter(x=>x.score>=18).sort((x,y)=>y.score-x.score);
     if(!ranked.length)return [];
     const best=ranked[0].score;
-    return ranked.filter(x=>x.score>=Math.max(18,best*.88)).slice(0,4)
+    return ranked.filter(x=>x.score>=Math.max(18,best*.94)).slice(0,3)
       .sort((x,y)=>x.i-y.i).map(x=>x.i);
   }
 
@@ -4135,7 +4144,7 @@
     const status=document.getElementById('pp360WordMatchStatus');
     if(status)status.textContent=focus
       ? (indexes.length?indexes.length+' closest text match'+(indexes.length===1?'':'es')+' highlighted':
-          'No close text match. Try Find with fewer words.')
+          'No reliable matching passage found. Try Find or inspect the document.')
       :'';
     if(focusNode){
       requestAnimationFrame(()=>pp360ScrollToMatch(target,focusNode));
@@ -4518,12 +4527,13 @@
       seen.add(id);
       const fileName = String(src?.file_name || '');
       const isSheet = /\.(xlsx|xls|csv)$/i.test(fileName);
+      const isPdf = /\.pdf$/i.test(fileName);
       const page = Number(src?.page);
       const pageEnd = Number(src?.page_end);
       const safePage = Number.isFinite(page) && page > 0 ? Math.floor(page) : null;
       const safeEnd = Number.isFinite(pageEnd) && pageEnd >= page ? Math.floor(pageEnd) : safePage;
-      const pageArg = (!isSheet && safePage) ? ',' + safePage : '';
-      const pageLabel = isSheet
+      const pageArg = (isPdf && safePage) ? ',' + safePage : '';
+      const pageLabel = !isPdf
         ? ''
         : (safePage
             ? (safeEnd && safeEnd > safePage
@@ -4534,7 +4544,8 @@
       const sourceFocus=encodeURIComponent(JSON.stringify({
         query:String(document.getElementById('q')?.value||'').slice(0,350),
         answerLines:cleanedLines.slice(0,15),
-        evidence_excerpt:String(src?.evidence_excerpt||'').slice(0,500)
+        evidence_excerpt:String(src?.evidence_excerpt||'').slice(0,500),
+        scope:String(payload?.scope||'').slice(0,90)
       })).replace(/'/g,'%27');
       buttons.push('<button onclick="viewDocument(\'' + id + '\',' + (safePage||'null') +
         ',\'' + sourceFocus + '\')">' + buttonLabel + '</button>');
