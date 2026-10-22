@@ -3858,6 +3858,77 @@
     }
   }
 
+  // In-app Word preview used by every document entry point (Admin, Common,
+  // equipment tabs, search results and history). The file stays in private
+  // storage; the browser downloads its bytes only into memory for rendering.
+  function closeWordPreview() {
+    document.getElementById('wordPreviewModal')?.remove();
+  }
+  window.closeWordPreview = closeWordPreview;
+
+  async function previewWordDocument(d) {
+    closeWordPreview();
+    document.body.insertAdjacentHTML('beforeend', `
+      <div class="modalback" id="wordPreviewModal" role="dialog" aria-modal="true" aria-label="Word document preview">
+        <div class="pp360-word-modal">
+          <div class="spreadsheet-preview-head">
+            <div><h3>Word Document Preview</h3>
+              <div class="muted small">${esc(d.file_name || 'Document')}</div></div>
+            <button type="button" onclick="closeWordPreview()">Close</button>
+          </div>
+          <p class="muted small">Text-only secure preview. Complex layouts, images and embedded charts may not appear.</p>
+          <div class="pp360-word-body" id="wordPreviewBody" role="document">Loading document…</div>
+        </div>
+      </div>`);
+    const target = document.getElementById('wordPreviewBody');
+    try {
+      if (!window.JSZip) throw new Error('Word preview library is unavailable. Refresh and try again.');
+      const { data:blob, error } = await client().storage
+        .from('plant-documents').download(d.storage_path);
+      if (error || !blob) throw error || new Error('Could not read this document.');
+      const zip = await JSZip.loadAsync(await blob.arrayBuffer());
+      const entry = zip.file('word/document.xml');
+      if (!entry) throw new Error('This Word document has no readable document body.');
+      const xml = new DOMParser().parseFromString(await entry.async('string'),'application/xml');
+      if (xml.querySelector('parsererror')) throw new Error('Could not parse the Word document.');
+      const ns='http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+      const body=xml.getElementsByTagNameNS(ns,'body')[0];
+      if (!body) throw new Error('The document is empty.');
+      const blocks=[];
+      function paragraphText(node) {
+        let out='';
+        const walker=xml.createTreeWalker(node,NodeFilter.SHOW_ELEMENT);
+        while(walker.nextNode()){
+          const el=walker.currentNode;
+          if(el.namespaceURI!==ns)continue;
+          if(el.localName==='t'||el.localName==='delText')out+=el.textContent||'';
+          else if(el.localName==='tab')out+='\t';
+          else if(el.localName==='br'||el.localName==='cr')out+='\n';
+        }
+        return out.trim();
+      }
+      for(const node of Array.from(body.children)){
+        if(node.namespaceURI!==ns)continue;
+        if(node.localName==='p'){
+          const t=paragraphText(node);
+          if(t)blocks.push(t);
+        }else if(node.localName==='tbl'){
+          for(const row of Array.from(node.getElementsByTagNameNS(ns,'tr'))){
+            const cells=Array.from(row.children).filter(c=>c.localName==='tc'&&c.namespaceURI===ns);
+            const values=cells.map(cell=>Array.from(cell.getElementsByTagNameNS(ns,'p'))
+              .map(paragraphText).filter(Boolean).join(' / '));
+            if(values.some(Boolean))blocks.push(values.join('   |   '));
+          }
+          blocks.push('');
+        }
+      }
+      target.textContent=blocks.join('\n\n').trim()||'No readable text found in this document.';
+    }catch(err){
+      target.textContent='Preview unavailable: '+(err?.message||String(err))+
+        '. You can download the original file from secure storage if needed.';
+    }
+  }
+
   async function viewDocument(id, page=null) {
     let d = docs.find(x => x.id === id);
 
@@ -3873,6 +3944,11 @@
         return;
       }
       d = data;
+    }
+
+    if (/\\.docx$/i.test(String(d.file_name || ''))) {
+      await previewWordDocument(d);
+      return;
     }
 
     if (isSpreadsheetDocument(d)) {
