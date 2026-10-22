@@ -3855,7 +3855,7 @@
   }
   window.renderSpreadsheetSheet = renderSpreadsheetSheet;
 
-  async function previewSpreadsheet(d) {
+  async function previewSpreadsheet(d,focus=null) {
     if (!window.XLSX) {
       alert('Spreadsheet viewer is still loading. Please press ↻ refresh and try again.');
       return;
@@ -3892,7 +3892,7 @@
       const wb = XLSX.read(buf, {type:'array', cellDates:true});
       const rowsBySheet = {};
       const matchesBySheet = {};
-      const queryTokens = spreadsheetQueryTokens();
+      const queryTokens = focus?.query ? pp360FocusWords(focus.query+' '+focus.answerLines.join(' ')).slice(0,18) : spreadsheetQueryTokens();
 
       let bestSheet = wb.SheetNames[0] || '';
       let bestScore = -1;
@@ -4045,6 +4045,64 @@
     }
   }
 
+
+  // Shared source-focus utilities. Each supporting-source button carries its
+  // own question and answer, avoiding stale/global query context.
+  function pp360DecodeSourceFocus(raw) {
+    try {
+      const f=typeof raw==='string'?JSON.parse(decodeURIComponent(raw)):raw;
+      if(!f||typeof f!=='object')return null;
+      const query=String(f.query||'').slice(0,350);
+      const answerLines=(Array.isArray(f.answerLines)?f.answerLines:[])
+        .filter(x=>typeof x==='string').slice(0,15).map(x=>x.slice(0,500));
+      return query||answerLines.length?{query,answerLines}:null;
+    }catch(_){return null;}
+  }
+
+  function pp360FocusWords(value) {
+    const stop=new Set(['the','and','any','for','with','from','this','that','what','where','when','which','have',
+      'high','low','main','before','after','into','then','will','due','per','year','data','value','plant',
+      'give','show','tell','does','about','some','condition','conditions','set','point','below','above']);
+    return [...new Set(String(value||'').toLowerCase()
+      .replace(/[^a-z0-9.]+/g,' ').split(/\s+/)
+      .map(x=>x.replace(/\.$/,'')).filter(x=>x.length>2&&!stop.has(x)))];
+  }
+
+  function pp360FocusScore(text,focus) {
+    if(!focus)return 0;
+    const line=String(text||'').toLowerCase().replace(/[^a-z0-9.]+/g,' ').replace(/\s+/g,' ');
+    const questionWords=pp360FocusWords(focus.query);
+    const answer=focus.answerLines.join(' ');
+    const answerWords=pp360FocusWords(answer);
+    const nums=[...new Set((answer.match(/\b\d+(?:\.\d+)?\b/g)||[]).filter(x=>x.length>=2))];
+    let score=0;
+    for(const word of questionWords)if(line.includes(word))score+=5;
+    for(const word of answerWords)if(line.includes(word))score+=4;
+    for(const value of nums)if(new RegExp('(^|[^0-9.])'+value.replace('.','\\.')+'(?![0-9.])').test(line))score+=26;
+    // Matching several distinctive terms in the same row beats a distant heading.
+    const shared=questionWords.filter(word=>line.includes(word)).length;
+    if(shared>=2)score+=10;
+    if(shared>=3)score+=8;
+    if(nums.length && nums.some(n=>line.includes(n))&&shared>=2)score+=14;
+    return score;
+  }
+
+  function pp360FocusIndexes(blocks, focus) {
+    if(!focus||!Array.isArray(blocks)||!blocks.length)return [];
+    const ranked=blocks.map((line,i)=>({i,score:pp360FocusScore(line,focus)}))
+      .filter(x=>x.score>=18).sort((x,y)=>y.score-x.score);
+    if(!ranked.length)return [];
+    const best=ranked[0].score;
+    return ranked.filter(x=>x.score>=Math.max(18,best*.75)).slice(0,4)
+      .sort((x,y)=>x.i-y.i).map(x=>x.i);
+  }
+
+  function pp360ScrollToMatch(container,node) {
+    if(!container||!node)return;
+    const view=container.getBoundingClientRect(), hit=node.getBoundingClientRect();
+    container.scrollTop+=hit.top-view.top-Math.min(170,container.clientHeight*.28);
+  }
+
   // In-app Word preview used by every document entry point (Admin, Common,
   // equipment tabs, search results and history). The file stays in private
   // storage; the browser downloads its bytes only into memory for rendering.
@@ -4053,7 +4111,34 @@
   }
   window.closeWordPreview = closeWordPreview;
 
-  async function previewWordDocument(d) {
+
+  function pp360RenderWordEvidence(blocks,focus) {
+    const target=document.getElementById('wordPreviewBody');
+    if(!target)return;
+    const indexes=pp360FocusIndexes(blocks,focus);
+    const matched=new Set(indexes);
+    const fragment=document.createDocumentFragment();
+    let focusNode=null;
+    blocks.forEach((text,i)=>{
+      const line=document.createElement('div');
+      line.className='pp360-word-line'+(matched.has(i)?' pp360-evidence-match':'');
+      line.textContent=text;
+      if(matched.has(i)&&!focusNode)focusNode=line;
+      fragment.appendChild(line);
+    });
+    target.replaceChildren(fragment);
+    const status=document.getElementById('pp360WordMatchStatus');
+    if(status)status.textContent=focus
+      ? (indexes.length?indexes.length+' supporting passage'+(indexes.length===1?'':'s')+' highlighted':
+          'No close text match. Try Find with fewer words.')
+      :'';
+    if(focusNode){
+      requestAnimationFrame(()=>pp360ScrollToMatch(target,focusNode));
+    }else target.scrollTop=0;
+  }
+
+  let pp360WordPreviewBlocks=[];
+  async function previewWordDocument(d,focus=null) {
     closeWordPreview();
     document.body.insertAdjacentHTML('beforeend', `
       <div class="modalback" id="wordPreviewModal" role="dialog" aria-modal="true" aria-label="Word document preview">
@@ -4064,6 +4149,9 @@
             <button type="button" onclick="closeWordPreview()">Close</button>
           </div>
           <p class="muted small">Text-only secure preview. Complex layouts, images and embedded charts may not appear.</p>
+          <div class="pp360-document-find"><input id="pp360WordFind" type="search" placeholder="Find in this document" aria-label="Find text in document">
+            <button type="button" onclick="pp360FindWordText()">Find</button>
+            <span class="muted small" id="pp360WordMatchStatus" role="status"></span></div>
           <div class="pp360-word-body" id="wordPreviewBody" role="document">Loading document…</div>
         </div>
       </div>`);
@@ -4109,7 +4197,16 @@
           blocks.push('');
         }
       }
-      target.textContent=blocks.join('\n\n').trim()||'No readable text found in this document.';
+      pp360WordPreviewBlocks=blocks.filter(Boolean);
+      window.pp360FindWordText=function(){
+        const term=document.getElementById('pp360WordFind')?.value||'';
+        pp360RenderWordEvidence(pp360WordPreviewBlocks,term?{query:term,answerLines:[]}:null);
+      };
+      if(focus?.query){
+        const input=document.getElementById('pp360WordFind');
+        if(input)input.value=focus.query;
+      }
+      pp360RenderWordEvidence(pp360WordPreviewBlocks,focus);
     }catch(err){
       target.textContent='Preview unavailable: '+(err?.message||String(err))+
         '. You can download the original file from secure storage if needed.';
@@ -4159,7 +4256,7 @@
   }
   window.pp360UniversalPageStep=step=>pp360RenderPdfPage((pp360UniversalState?.page||1)+step)
     .catch(e=>{const b=document.getElementById('pp360UniversalBody');if(b)b.textContent='Page error: '+e.message});
-  async function previewUniversalDocument(d,page){
+  async function previewUniversalDocument(d,page,focus=null){
     closeUniversalPreview();
     const fileName=String(d.file_name||'Document');
     const ext=fileName.split('.').pop().toLowerCase();
@@ -4208,8 +4305,24 @@
         }
       }else if(['txt','log','md','json','xml','html','htm','css','js','sql','yaml','yml','ini','rtf','tsv','svg'].includes(ext)||mime.startsWith('text/')){
         const value=await blob.text();
-        body.textContent=value.slice(0,1500000)+(value.length>1500000?'\n[Preview truncated]':'');
-        info.textContent='Text preview · scripts disabled';
+        const fullText=value.slice(0,1500000)+(value.length>1500000?'\n[Preview truncated]':'');
+        const lines=fullText.split(/\n/);
+        const match=pp360FocusIndexes(lines,focus);
+        if(match.length){
+          const marked=new Set(match),fragment=document.createDocumentFragment();
+          let first=null;
+          lines.forEach((line,i)=>{
+            const row=document.createElement('div');
+            row.className=marked.has(i)?'pp360-evidence-match':'';
+            row.textContent=line;
+            if(marked.has(i)&&!first)first=row;
+            fragment.appendChild(row);
+          });
+          body.replaceChildren(fragment);
+          requestAnimationFrame(()=>pp360ScrollToMatch(body,first));
+          info.textContent='Text preview · supporting passage highlighted';
+        }else body.textContent=fullText;
+        if(!match.length)info.textContent='Text preview · scripts disabled';
       }else if(ext==='pptx'){
         if(!window.JSZip)throw new Error('Office preview library unavailable');
         const zip=await JSZip.loadAsync(await blob.arrayBuffer());
@@ -4248,7 +4361,8 @@
     }
   }
 
-  async function viewDocument(id, page=null) {
+  async function viewDocument(id, page=null, sourceFocus=null) {
+    const focus=pp360DecodeSourceFocus(sourceFocus);
     let d = docs.find(x => x.id === id);
 
     if (!d) {
@@ -4266,16 +4380,16 @@
     }
 
     if (/\.docx$/i.test(String(d.file_name || ''))) {
-      await previewWordDocument(d);
+      await previewWordDocument(d,focus);
       return;
     }
 
     if (isSpreadsheetDocument(d)) {
-      await previewSpreadsheet(d);
+      await previewSpreadsheet(d,focus);
       return;
     }
 
-    await previewUniversalDocument(d,page);
+    await previewUniversalDocument(d,page,focus);
 
   }
 
@@ -4402,7 +4516,12 @@
                 : ' · Page ' + safePage)
             : '');
       const buttonLabel = isSheet ? 'View supporting spreadsheet' : 'View supporting document' + pageLabel;
-      buttons.push('<button onclick="viewDocument(\'' + id + '\'' + pageArg + ')">' + buttonLabel + '</button>');
+      const sourceFocus=encodeURIComponent(JSON.stringify({
+        query:String(document.getElementById('q')?.value||'').slice(0,350),
+        answerLines:cleanedLines.slice(0,15)
+      })).replace(/'/g,'%27');
+      buttons.push('<button onclick="viewDocument(\'' + id + '\',' + (safePage||'null') +
+        ',\'' + sourceFocus + '\')">' + buttonLabel + '</button>');
       if (buttons.length >= 3) break;
     }
 
