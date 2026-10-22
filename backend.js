@@ -1811,30 +1811,216 @@
   // Central document-index action renderer: used by Admin Stored Documents,
   // Common Documents, and every equipment/section document view.
   // Future document tabs should call pp360DocumentIndexAction(d), not duplicate rules.
+
+  // One index action for ALL file formats and all current/future document tabs.
+  // Automated extraction is capability-aware; human-supplied text is available
+  // for formats with no safe server-side extractor.
+  function pp360IndexCapability(d) {
+    if(isPdfDocument(d))return 'pdf';
+    if(isIndexableImageFile(d))return 'image';
+    if(isIndexableOfficeFile(d))return 'office';
+    const ext=officeExt(d);
+    if(['txt','md','log','json','xml','html','htm','css','js','sql','yaml','yml','ini','tsv','svg'].includes(ext))return 'text';
+    if(ext==='pptx')return 'pptx';
+    return null;
+  }
+  function pp360DocumentIndexStatus(d) {
+    if(d?.processing_status==='processing')return 'Indexing…';
+    if(d?.processing_status==='error')return 'Index failed';
+    return d?.processing_status==='ready'&&String(d?.extracted_text||'').trim()
+      ? 'Search ready' : 'Not indexed';
+  }
   function pp360DocumentIndexAction(d) {
-    if (backendRole !== 'admin' || !d?.id) return '';
-    const id = String(d.id);
-    const action = (fn,label) => `<button type="button" onclick="${fn}('${id}')">${esc(label)}</button>`;
-    if (isPdfDocument(d)) {
-      if (d.processing_status !== 'ready') return action('indexExistingPdf','Index PDF');
-      const processed = new Set(
-        (Array.isArray(d.metadata?.vision_indexed_pages) ? d.metadata.vision_indexed_pages : [])
-          .map(Number).filter(x => Number.isInteger(x) && x > 0)
-      ).size;
-      const remaining = weakPdfPages(d).length;
-      if (!remaining) return '<button type="button" disabled title="No weak/scanned pages left to index">Vision Complete</button>';
-      return action('visionIndexPdf', processed
-        ? 'Vision Index · ' + processed + ' / ' + (processed + remaining)
-        : 'Vision Index');
-    }
-    if (d.processing_status === 'ready') return '';
-    if (isIndexableImageFile(d)) return action('indexExistingImage','Index Image');
-    if (isIndexableOfficeFile(d)) return action('indexExistingOffice','Index Office');
-    return '<span class="muted small" title="Convert to PDF or DOCX for indexing">Not indexed</span>';
+    if(backendRole!=='admin'||!d?.id)return '';
+    const id=String(d.id);
+    const index='<button type="button" onclick="openManualIndex(\''+id+'\')" title="Index or add searchable text to this document">Manual Index</button>';
+    if(!isPdfDocument(d)||d.processing_status!=='ready')return index;
+    const count=new Set((Array.isArray(d.metadata?.vision_indexed_pages)?d.metadata.vision_indexed_pages:[])
+      .map(Number).filter(n=>Number.isInteger(n)&&n>0)).size;
+    const remaining=weakPdfPages(d).length;
+    if(!remaining)return index+'<button type="button" disabled title="No remaining weak/scanned PDF pages">Vision Complete</button>';
+    const label=count?'Vision Index · '+count+' / '+(count+remaining):'Vision Index';
+    return index+'<button type="button" onclick="visionIndexPdf(\''+id+'\')">'+esc(label)+'</button>';
   }
   window.pp360DocumentIndexAction = pp360DocumentIndexAction;
 
+  let pp360ManualIndexState=null;
+  function closeManualIndex(){
+    if(pp360ManualIndexState?.busy)return;
+    pp360ManualIndexState=null;
+    document.getElementById('pp360ManualIndexModal')?.remove();
+  }
+  window.closeManualIndex=closeManualIndex;
+
+  function pp360ManualIndexMessage(message,good=false){
+    const el=document.getElementById('pp360ManualIndexStatus');
+    if(!el)return;
+    el.textContent=String(message||'');
+    el.classList.toggle('oktext',Boolean(good));
+    el.classList.toggle('errtext',Boolean(message)&&!good);
+  }
+
+  async function pp360RefreshDocumentViews(){
+    await loadDocsFromBackend();
+    const active=pp360ManualIndexState?.section;
+    const v=document.getElementById('view');
+    if(active && v?.querySelector('.equipment-doc-list') && typeof window.renderEquipmentDocuments==='function'){
+      await window.renderEquipmentDocuments(active.category,active.section);
+    }
+  }
+
+  window.openManualIndex=async function(id){
+    if(backendRole!=='admin')return;
+    let d=docs.find(item=>String(item.id)===String(id));
+    if(!d){
+      const {data,error}=await client().from('documents').select('*').eq('id',id).single();
+      if(error||!data)return alert('Document details unavailable: '+(error?.message||'Not found'));
+      d=data;
+    }
+    pp360ManualIndexState=null;
+    document.getElementById('pp360ManualIndexModal')?.remove();
+    const available=pp360IndexCapability(d);
+    const indexed=Boolean(String(d.extracted_text||'').trim())&&d.processing_status==='ready';
+    const note=available==='pdf'?'Extract selectable PDF text. For scanned pages use Vision Index on the document row (AI credits may apply).'
+      :available==='office'?'Extract Word, spreadsheet or text using the existing secure indexer.'
+      :available==='image'?'Use the secure image indexer. AI usage charges may apply.'
+      :available==='pptx'?'Extract readable slide text in the browser (charts and images are not included).'
+      :available==='text'?'Extract the readable plain-text content of this file.'
+      :'No automatic text extractor supports this format. Paste an accurate transcription below to make it searchable.';
+    const section=window.pp360ActiveDocumentSection &&
+      document.getElementById('view')?.querySelector('.equipment-doc-list')
+      ? {...window.pp360ActiveDocumentSection}:null;
+    pp360ManualIndexState={id:String(d.id),doc:d,busy:false,section};
+    const autoButton=available?'<button type="button" id="pp360IndexAuto" onclick="pp360RunManualAutoIndex()">Extract &amp; Index Automatically</button>':'';
+    document.body.insertAdjacentHTML('beforeend',
+      '<div class="modalback" id="pp360ManualIndexModal" role="dialog" aria-modal="true" aria-labelledby="pp360ManualIndexTitle">'+
+      '<div class="pp360-manual-index-modal">'+
+      '<div class="spreadsheet-preview-head"><div><h3 id="pp360ManualIndexTitle">Manual Document Index</h3>'+
+      '<div class="muted small">'+esc(d.file_name||'Document')+' · '+esc(d.category||'General')+'</div></div>'+
+      '<button type="button" onclick="closeManualIndex()">Close</button></div>'+
+      '<p class="muted small">Available for every file type and every department. Only administrators can update searchable plant data.</p>'+
+      '<p class="pp360-index-existing">'+(indexed?'Already searchable · '+String(d.extracted_text.length).toLocaleString()+' indexed characters':'Not yet searchable')+'</p>'+
+      '<div class="pp360-index-auto">'+autoButton+'<p class="muted small">'+esc(note)+'</p></div>'+
+      '<label for="pp360ManualIndexText"><b>Enter / paste verified document text</b></label>'+
+      '<textarea id="pp360ManualIndexText" rows="9" placeholder="Paste the technical text, table values, setpoints or transcript here. Use complete equipment names and units."></textarea>'+
+      '<label for="pp360ManualIndexMode"><b>How to save</b></label>'+
+      '<select id="pp360ManualIndexMode">'+
+      (indexed?'<option value="append" selected>Append to existing indexed data (recommended)</option>':'')+
+      '<option value="replace">'+(indexed?'Replace existing indexed data':'Create searchable index')+'</option></select>'+
+      '<p class="muted small">Existing data is preserved unless Replace is selected. Verify equipment identity, units and interlock limits before indexing.</p>'+
+      '<div class="actions"><button type="button" class="primary" id="pp360ManualIndexSave" onclick="pp360SaveManualIndex()">Save &amp; Index Text</button>'+
+      '<button type="button" onclick="closeManualIndex()">Cancel</button></div>'+
+      '<div class="pp360-index-status" id="pp360ManualIndexStatus" role="status" aria-live="polite"></div>'+
+      '</div></div>');
+    document.getElementById('pp360ManualIndexText')?.focus();
+  };
+
+  async function pp360PersistManualIndex(text,mode,origin){
+    const state=pp360ManualIndexState;
+    if(!state||backendRole!=='admin')throw new Error('Admin access required.');
+    const clean=String(text||'').replace(/\[\[PAGE\s+\d+\]\]/gi,'[PAGE]').trim();
+    if(clean.length<20)throw new Error('Enter at least 20 characters of meaningful source text.');
+    if(clean.length>900000)throw new Error('Text exceeds the 900,000-character indexing limit.');
+    const {data:latest,error:readError}=await client().from('documents')
+      .select('id,processing_status,extracted_text,page_count,metadata')
+      .eq('id',state.id).single();
+    if(readError||!latest)throw readError||new Error('Document not found.');
+    if(latest.processing_status==='processing')throw new Error('The document is currently being indexed. Try after it completes.');
+    const original=String(latest.extracted_text||'').trim();
+    const append=mode==='append'&&original.length>0;
+    const combined=append?original+'\n\n[MANUALLY VERIFIED INDEX ADDENDUM]\n'+clean
+      :'[[PAGE 1]]\n'+clean;
+    const meta={...(latest.metadata&&typeof latest.metadata==='object'?latest.metadata:{}),
+      manual_indexed_at:new Date().toISOString(),
+      manual_index_source:origin,
+      manual_index_mode:append?'append':'replace'};
+    const {data:updated,error:writeError}=await client().from('documents')
+      .update({extracted_text:combined,processing_status:'ready',
+        page_count:append?(latest.page_count||1):1,metadata:meta,updated_at:new Date().toISOString()})
+      .eq('id',state.id).select('id,processing_status').single();
+    if(writeError||updated?.processing_status!=='ready')throw writeError||new Error('Index status could not be verified.');
+    await pp360RefreshDocumentViews();
+    return combined.length;
+  }
+
+  window.pp360SaveManualIndex=async function(){
+    const state=pp360ManualIndexState;
+    if(!state||state.busy||backendRole!=='admin')return;
+    const content=document.getElementById('pp360ManualIndexText')?.value||'';
+    const mode=document.getElementById('pp360ManualIndexMode')?.value||'replace';
+    if(mode==='replace'&&state.doc.processing_status==='ready'&&
+      !confirm('Replace this document’s existing searchable text with the new text? This cannot be undone.'))return;
+    state.busy=true;
+    const save=document.getElementById('pp360ManualIndexSave');
+    if(save){save.disabled=true;save.textContent='Indexing…';}
+    pp360ManualIndexMessage('');
+    try{
+      const chars=await pp360PersistManualIndex(content,mode,'admin_text_entry');
+      pp360ManualIndexMessage('✓ Index saved and verified ('+chars.toLocaleString()+' characters). Search Plant Data can now use it.',true);
+      state.doc.processing_status='ready';
+    }catch(err){pp360ManualIndexMessage('Index failed: '+(err?.message||String(err)));}
+    finally{
+      state.busy=false;
+      if(save){save.disabled=false;save.textContent='Save & Index Text';}
+    }
+  };
+
+  window.pp360RunManualAutoIndex=async function(){
+    const state=pp360ManualIndexState;
+    if(!state||state.busy||backendRole!=='admin')return;
+    const d=state.doc,capability=pp360IndexCapability(d);
+    if(d.processing_status==='processing')return pp360ManualIndexMessage('This document is already being indexed.');
+    if(!capability)return pp360ManualIndexMessage('Automatic indexing is not available for this format; paste verified text instead.');
+    if(d.processing_status==='ready'&&
+      !confirm('Automatic re-indexing may replace existing extracted text. Continue?'))return;
+    if(['pdf','image','office'].includes(capability)){
+      const id=state.id,section=state.section;
+      closeManualIndex();
+      if(capability==='pdf')await indexExistingPdf(id);
+      else if(capability==='image')await window.indexExistingImage(id);
+      else await window.indexExistingOffice(id);
+      if(section && document.getElementById('view')?.querySelector('.equipment-doc-list')){
+        await window.renderEquipmentDocuments(section.category,section.section);
+      }
+      return;
+    }
+    state.busy=true;
+    const button=document.getElementById('pp360IndexAuto');
+    if(button){button.disabled=true;button.textContent='Extracting…';}
+    pp360ManualIndexMessage('');
+    try{
+      const {data:blob,error}=await client().storage.from('plant-documents').download(d.storage_path);
+      if(error||!blob)throw error||new Error('Unable to read file from secure storage.');
+      let value='';
+      if(capability==='text'){
+        value=await blob.text();
+      }else if(capability==='pptx'){
+        if(!window.JSZip)throw new Error('PowerPoint reader not loaded.');
+        const archive=await JSZip.loadAsync(await blob.arrayBuffer());
+        const slides=Object.keys(archive.files).filter(name=>/^ppt\/slides\/slide\d+\.xml$/.test(name))
+          .sort((x,y)=>Number(x.match(/slide(\d+)/)?.[1]||0)-Number(y.match(/slide(\d+)/)?.[1]||0));
+        const items=[];
+        for(const name of slides.slice(0,160)){
+          const xml=new DOMParser().parseFromString(await archive.file(name).async('string'),'application/xml');
+          const parts=Array.from(xml.getElementsByTagNameNS('http://schemas.openxmlformats.org/drawingml/2006/main','t'))
+            .map(node=>node.textContent||'').filter(Boolean);
+          if(parts.length)items.push('Slide '+(items.length+1)+'\n'+parts.join('\n'));
+        }
+        value=items.join('\n\n');
+      }
+      const chars=await pp360PersistManualIndex(value,'replace','automatic_'+capability);
+      pp360ManualIndexMessage('✓ Automatically indexed and verified ('+chars.toLocaleString()+' characters).',true);
+      state.doc.processing_status='ready';
+    }catch(err){pp360ManualIndexMessage('Automatic indexing failed: '+(err?.message||String(err)));}
+    finally{
+      state.busy=false;
+      if(button){button.disabled=false;button.textContent='Extract & Index Automatically';}
+    }
+  };
+
+
   window.renderEquipmentDocuments = async function(category, sectionName) {
+    window.pp360ActiveDocumentSection={category,section:sectionName};
     const v = document.getElementById('view');
     if (!v) return;
 
@@ -1882,7 +2068,7 @@
               <div class="equipment-doc-row">
                 <div class="equipment-doc-main">
                   <b>${esc(d.file_name)}</b>
-                  <div class="muted small">${esc(d.document_type || 'Other')} • ${formatBytes(d.file_size || 0)}${d.page_count ? ' • '+d.page_count+' pages' : ''} • ${d.processing_status==='ready'?'Search ready':'Not yet searchable'}</div>
+                  <div class="muted small">${esc(d.document_type || 'Other')} • ${formatBytes(d.file_size || 0)}${d.page_count ? ' • '+d.page_count+' pages' : ''} • ${pp360DocumentIndexStatus(d)}</div>
                 </div>
                 <div class="actions">
                   ${pp360DocumentIndexAction(d)}
@@ -3496,6 +3682,7 @@
         return '<div class="admin-file-row">' +
           '<div class="admin-file-name" title="' + esc(d.file_name || '') + '">' +
             '<b>' + esc(d.file_name || 'Unnamed document') + '</b>' +
+            '<div class="muted small">' + esc(pp360DocumentIndexStatus(d)) + '</div>' +
           '</div>' +
           '<div class="admin-file-actions">' +
             indexAction +
