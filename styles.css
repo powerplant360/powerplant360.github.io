@@ -2194,3 +2194,42 @@ body:not(.auth-locked)>header:has(#headerClock) .header-clock strong{font-size:1
   body:not(.auth-locked)>header:has(#headerClock) .plant-identity small{font-size:10px}
   body:not(.auth-locked)>header:has(#headerClock) .header-clock{min-width:95px;width:95px}
 }
+
+
+/* Mobile: reserve an explicit second header row for the shared plant identity. */
+@media(max-width:960px){
+  body.auth-ready>header:has(#headerClock){
+    grid-template-rows:auto auto;
+    align-items:center;
+  }
+  body.auth-ready>header:has(#headerClock) .plant-identity:not([hidden]){
+    display:flex!important;
+    grid-column:1 / 3;
+    grid-row:2;
+    min-width:0;
+    width:100%;
+    max-width:100%;
+    position:static;
+    visibility:visible;
+    opacity:1;
+    padding:8px 2px 4px;
+    align-items:flex-start;
+    text-align:left;
+    overflow:visible;
+  }
+  body.auth-ready>header:has(#headerClock) .plant-identity strong{
+    font-size:clamp(12px,2.6vw,17px);
+    white-space:normal;
+    overflow-wrap:anywhere;
+  }
+  body.auth-ready>header:has(#headerClock) .plant-identity small{
+    font-size:clamp(10px,2.1vw,13px);
+    display:block;
+    white-space:normal;
+  }
+  body.auth-ready>header:has(#headerClock) .header-clock{
+    grid-column:3;
+    grid-row:2;
+    align-self:center;
+  }
+}
