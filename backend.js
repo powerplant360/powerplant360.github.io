@@ -3763,25 +3763,31 @@
     return norm(raw).split(' ').filter(x => x.length >= 2 && !['what','is','the','of','for','show','give','please','data','details','detail'].includes(x));
   }
 
-  function scoreSpreadsheetRows(rows, sheetName, queryTokens) {
-    if (!queryTokens.length) return { score:0, matchRow:-1 };
-    let bestScore = 0;
-    let bestRow = -1;
-    const sheetNorm = norm(sheetName || '');
-    for (let r=0; r<rows.length; r++) {
-      const rowNorm = norm((rows[r] || []).join(' '));
-      let score = 0;
-      for (const t of queryTokens) {
-        if (rowNorm.includes(t)) score += 4;
-        if (sheetNorm.includes(t)) score += 2;
-      }
-      if (queryTokens.every(t => rowNorm.includes(t))) score += 12;
-      if (score > bestScore) {
-        bestScore = score;
-        bestRow = r;
-      }
+  function scoreSpreadsheetRows(rows,sheetName,queryTokens,focus=null) {
+    if(!focus)return {score:0,matchRow:-1};
+    const queryNums=pp360FocusNumbers(focus.query||'');
+    const answerNums=pp360FocusNumbers((focus.answerLines||[]).join(' '));
+    const queryWords=pp360FocusWords(focus.query||'');
+    let bestScore=0,bestRow=-1;
+    for(let r=0;r<rows.length;r++){
+      const text=(rows[r]||[]).join(' ');
+      const numericText=text.replace(/,/g,'');
+      const hasNum=n=>new RegExp('(^|[^0-9.])'+n.replace(/\./g,'\\.')+'(?![0-9.])').test(numericText);
+      const qHits=queryNums.filter(hasNum).length;
+      const aHits=answerNums.filter(hasNum).length;
+      // The selected depth/condition and returned number must occur in
+      // the candidate row. Other rows are not supporting evidence.
+      if(queryNums.length&&!qHits)continue;
+      if(answerNums.length&&!aHits)continue;
+      const rowWords=new Set(pp360FocusWords(text+' '+sheetName));
+      const wordHits=queryWords.filter(w=>rowWords.has(w)).length;
+      if(!queryNums.length&&!answerNums.length&&queryWords.length&&
+        wordHits<Math.max(1,Math.ceil(queryWords.length*.5)))continue;
+      const score=qHits*90+aHits*85+wordHits*10+
+        pp360FocusWords(focus.excerpt||'').filter(w=>rowWords.has(w)).length*4;
+      if(score>bestScore){bestScore=score;bestRow=r;}
     }
-    return { score:bestScore, matchRow:bestRow };
+    return {score:bestScore,matchRow:bestRow};
   }
 
   function closeSpreadsheetPreview() {
@@ -3819,13 +3825,13 @@
       const absoluteRow = start + i;
       const row = visible[i] || [];
       const rowText = norm(row.join(' '));
-      const rowMatch = tokens.length && tokens.some(t => rowText.includes(t));
+      const rowMatch = matchRow === absoluteRow;
       html += '<tr' + (rowMatch ? ' class="sheet-match-row"' : '') + '>';
       html += '<th class="sheet-rownum">' + (absoluteRow + 1) + '</th>';
       for (let c=0; c<maxCols; c++) {
         const val = row[c] == null ? '' : String(row[c]);
         const cellNorm = norm(val);
-        const cellMatch = tokens.length && tokens.some(t => cellNorm.includes(t));
+        const cellMatch = rowMatch && tokens.length && tokens.some(t => cellNorm.includes(t));
         html += '<td' + (cellMatch ? ' class="sheet-match-cell"' : '') + '>' + esc(val) + '</td>';
       }
       html += '</tr>';
@@ -3835,7 +3841,7 @@
     body.innerHTML = html || '<div class="notice">This worksheet has no visible cell data.</div>';
 
     if (meta) {
-      const matchText = matchRow >= 0 ? ' • closest match around row ' + (matchRow + 1) : '';
+      const matchText = matchRow >= 0 ? ' • closest matching row ' + (matchRow + 1) : (state.focus ? ' • no supported matching row found' : '');
       const rangeText = rows.length > end-start
         ? ' • showing rows ' + (start + 1) + '–' + end + ' of ' + rows.length
         : ' • ' + rows.length + ' rows';
@@ -3906,7 +3912,7 @@
           blankrows:false
         });
         rowsBySheet[name] = rows;
-        const match = scoreSpreadsheetRows(rows,name,queryTokens);
+        const match = scoreSpreadsheetRows(rows,name,queryTokens,focus);
         matchesBySheet[name] = match;
         if (match.score > bestScore) {
           bestScore = match.score;
@@ -3919,7 +3925,8 @@
         workbook:wb,
         rowsBySheet,
         matchesBySheet,
-        queryTokens
+        queryTokens,
+        focus
       };
 
       const tabs = document.getElementById('spreadsheetSheetTabs');
