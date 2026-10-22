@@ -1814,8 +1814,7 @@
   function pp360DocumentIndexAction(d) {
     if (backendRole !== 'admin' || !d?.id) return '';
     const id = String(d.id);
-    const action = (fn,label) =>
-      '<button type="button" onclick="' + fn + '(\\'' + id + '\\')">' + esc(label) + '</button>';
+    const action = (fn,label) => `<button type="button" onclick="${fn}('${id}')">${esc(label)}</button>`;
     if (isPdfDocument(d)) {
       if (d.processing_status !== 'ready') return action('indexExistingPdf','Index PDF');
       const processed = new Set(
