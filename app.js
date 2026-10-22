@@ -298,7 +298,9 @@ function renderSearchHistory(){
   const [i,j]=String(b.dataset.historySource||'').split(':').map(Number);
   const src=readAnswerHistory()[norm(history[i]||'')]?.sources?.[j];
   if(src && /^[a-f0-9-]{36}$/i.test(String(src.document_id||''))){
-    window.viewDocument(src.document_id,src.page||undefined);
+    const search=history[i]||'';
+    const snapshot=readAnswerHistory()[norm(search)];
+    window.viewDocument(src.document_id,src.page||undefined,{query:search,answerLines:Array.isArray(snapshot?.lines)?snapshot.lines:[]});
   }
  }));
 }
