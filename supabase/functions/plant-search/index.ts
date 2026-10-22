@@ -801,7 +801,19 @@ source_indices must contain only the source numbers that directly support the an
         document_id:x.document_id,
         file_name:x.file_name,
         page:x.page,
-        page_end:x.page_end || x.page
+        page_end:x.page_end || x.page,
+        // Verbatim supporting window excerpt, for in-app source navigation.
+        evidence_excerpt:(() => {
+          const lines=String(x.text||"").split(/\n+/).map((v:string)=>v.trim()).filter(Boolean);
+          const queryWords=tokens(question);
+          const answerNumbers=answerLinesSafe.join(" ").match(/\b\d+(?:\.\d+)?\b/g)||[];
+          const ranked=lines.map((line:string)=>({
+            line,score:queryWords.filter(w=>norm(line).includes(w)).length*5+
+              answerNumbers.filter((n:string)=>line.includes(n)).length*14
+          })).sort((a,b)=>b.score-a.score);
+          const best=ranked[0];
+          return (best&&best.score>0?best.line:String(x.text||"").slice(0,350)).slice(0,500);
+        })()
       }));
 
     const answerLines = answerLinesSafe;

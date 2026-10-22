@@ -3892,7 +3892,7 @@
       const wb = XLSX.read(buf, {type:'array', cellDates:true});
       const rowsBySheet = {};
       const matchesBySheet = {};
-      const queryTokens = focus?.query ? pp360FocusWords(focus.query+' '+focus.answerLines.join(' ')).slice(0,18) : spreadsheetQueryTokens();
+      const queryTokens = focus ? pp360FocusWords([focus.excerpt||'',focus.query||'',...(focus.answerLines||[])].join(' ')).slice(0,30) : [];
 
       let bestSheet = wb.SheetNames[0] || '';
       let bestScore = -1;
@@ -4055,7 +4055,8 @@
       const query=String(f.query||'').slice(0,350);
       const answerLines=(Array.isArray(f.answerLines)?f.answerLines:[])
         .filter(x=>typeof x==='string').slice(0,15).map(x=>x.slice(0,500));
-      return query||answerLines.length?{query,answerLines}:null;
+      const excerpt=String(f.evidence_excerpt||f.excerpt||'').slice(0,500);
+      return query||answerLines.length||excerpt?{query,answerLines,excerpt}:null;
     }catch(_){return null;}
   }
 
@@ -4072,10 +4073,14 @@
     if(!focus)return 0;
     const line=String(text||'').toLowerCase().replace(/[^a-z0-9.]+/g,' ').replace(/\s+/g,' ');
     const questionWords=pp360FocusWords(focus.query);
-    const answer=focus.answerLines.join(' ');
+    const answer=(focus.answerLines||[]).join(' ');
+    const excerpt=String(focus.excerpt||'').toLowerCase().replace(/[^a-z0-9.]+/g,' ').replace(/\s+/g,' ').trim();
+    const excerptWords=pp360FocusWords(excerpt).filter(w=>w.length>=4);
+    const excerptHits=excerptWords.filter(w=>line.includes(w)).length;
     const answerWords=pp360FocusWords(answer);
     const nums=[...new Set((answer.match(/\b\d+(?:\.\d+)?\b/g)||[]).filter(x=>x.length>=2))];
-    let score=0;
+    let score=excerptHits?Math.round(55*excerptHits/Math.max(1,excerptWords.length)):0;
+    if(excerpt.length>=24 && (line.includes(excerpt)||(excerpt.includes(line.trim())&&line.trim().length>=24)))score+=130;
     for(const word of questionWords)if(line.includes(word))score+=5;
     for(const word of answerWords)if(line.includes(word))score+=4;
     for(const value of nums)if(new RegExp('(^|[^0-9.])'+value.replace('.','\\.')+'(?![0-9.])').test(line))score+=26;
@@ -4129,7 +4134,7 @@
     target.replaceChildren(fragment);
     const status=document.getElementById('pp360WordMatchStatus');
     if(status)status.textContent=focus
-      ? (indexes.length?indexes.length+' supporting passage'+(indexes.length===1?'':'s')+' highlighted':
+      ? (indexes.length?indexes.length+' closest text match'+(indexes.length===1?'':'es')+' highlighted':
           'No close text match. Try Find with fewer words.')
       :'';
     if(focusNode){
@@ -4320,7 +4325,7 @@
           });
           body.replaceChildren(fragment);
           requestAnimationFrame(()=>pp360ScrollToMatch(body,first));
-          info.textContent='Text preview · supporting passage highlighted';
+          info.textContent='Text preview · closest matching passage highlighted';
         }else body.textContent=fullText;
         if(!match.length)info.textContent='Text preview · scripts disabled';
       }else if(ext==='pptx'){
@@ -4335,8 +4340,18 @@
             .map(el=>el.textContent||'');
           lines.push('SLIDE '+(lines.length+1)+'\n'+values.join('\n'));
         }
-        body.textContent=lines.join('\n\n')||'No readable slide text';
-        info.textContent='PowerPoint text preview · layout/images omitted';
+        const marked=pp360FocusIndexes(lines,focus);
+        if(marked.length){
+          const fragment=document.createDocumentFragment();
+          let first=null;
+          lines.forEach((line,i)=>{const row=document.createElement('div');row.textContent=line;
+            if(marked.includes(i)){row.className='pp360-evidence-match';if(!first)first=row;}
+            fragment.appendChild(row);
+          });
+          body.replaceChildren(fragment);
+          requestAnimationFrame(()=>pp360ScrollToMatch(body,first));
+        }else body.textContent=lines.join('\n\n')||'No readable slide text';
+        info.textContent='PowerPoint text preview · layout/images omitted'+(marked.length?' · closest evidence highlighted':'');
       }else if(ext==='zip'){
         if(!window.JSZip)throw new Error('ZIP library unavailable');
         const zip=await JSZip.loadAsync(await blob.arrayBuffer());
@@ -4518,7 +4533,8 @@
       const buttonLabel = isSheet ? 'View supporting spreadsheet' : 'View supporting document' + pageLabel;
       const sourceFocus=encodeURIComponent(JSON.stringify({
         query:String(document.getElementById('q')?.value||'').slice(0,350),
-        answerLines:cleanedLines.slice(0,15)
+        answerLines:cleanedLines.slice(0,15),
+        evidence_excerpt:String(src?.evidence_excerpt||'').slice(0,500)
       })).replace(/'/g,'%27');
       buttons.push('<button onclick="viewDocument(\'' + id + '\',' + (safePage||'null') +
         ',\'' + sourceFocus + '\')">' + buttonLabel + '</button>');
