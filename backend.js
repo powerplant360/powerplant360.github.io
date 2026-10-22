@@ -234,6 +234,7 @@
     window.pp360SignedIn = Boolean(backendSession);
     window.pp360SearchUserId = backendSession?.user?.id || null;
     window.pp360SetHistoryUser?.(backendSession?.user?.id || null);
+    window.pp360RenderPlantIdentity?.();
 
     const btn = document.getElementById('plantSearchBtn');
     const onlineBtn = document.getElementById('onlineSearchBtn');
@@ -2186,6 +2187,9 @@
           <button class="admin-side-btn active" data-admin-nav="documents" onclick="showAdminPanel('documents',this)">
             <span class="admin-nav-icon">▤</span><span>Stored Documents</span>
           </button>
+          <button class="admin-side-btn" data-admin-nav="plant" onclick="showAdminPanel('plant',this)">
+            <span class="admin-nav-icon">▣</span><span>Plant Details</span>
+          </button>
         </aside>
 
         <section class="admin-main-panel">
@@ -2295,6 +2299,19 @@
             </div>
           </div>
 
+          <div class="admin-panel" data-admin-panel="plant" hidden>
+            <div class="admin-panel-heading"><h3>Plant Details</h3>
+              <p class="muted">Configure the plant details displayed in this browser's header.</p></div>
+            <form class="pp360-plant-details-form" onsubmit="savePlantDetails(event)">
+              <label for="pp360PlantName">Plant Name</label>
+              <input id="pp360PlantName" type="text" maxlength="100" autocomplete="off" placeholder="Enter approved plant name" required>
+              <label for="pp360PlantCapacity">Installed Capacity (MW)</label>
+              <input id="pp360PlantCapacity" type="number" min="0.001" max="100000" step="any" inputmode="decimal" placeholder="Enter nameplate capacity" required>
+              <div class="actions"><button class="primary" type="submit">Save Details</button><button type="button" onclick="clearPlantDetails()">Clear</button></div>
+              <div id="pp360PlantDetailsStatus" class="muted small" role="status"></div>
+              <p class="muted small">Saved in this browser only; not shared with other users or devices. Sharing requires a separate authorized database change.</p>
+            </form>
+          </div>
           <div class="admin-panel active" data-admin-panel="documents">
             <div class="admin-panel-heading">
               <h3>Stored Documents</h3>
@@ -2320,6 +2337,7 @@
       </div>
     </div>`;
 
+    pp360LoadPlantDetailsForm();
     setupDropZone();
     setupAdminClipboardPaste();
     await loadDocsFromBackend();
@@ -3612,6 +3630,59 @@
     `;
   }
 
+
+  const PP360_PLANT_DETAILS_KEY='pp360-plant-details-v1';
+  function pp360ReadPlantDetails(){
+    try {
+      const raw=JSON.parse(localStorage.getItem(PP360_PLANT_DETAILS_KEY)||'{}');
+      const name=typeof raw.name==='string'?raw.name.trim().slice(0,100):'';
+      const capacity=Number(raw.capacity);
+      return {name,capacity:raw.capacity!==''&&raw.capacity!=null&&Number.isFinite(capacity)&&capacity>0&&capacity<=100000?capacity:null};
+    }catch(_){return {name:'',capacity:null};}
+  }
+  function pp360RenderPlantIdentity(){
+    const target=document.getElementById('plantIdentity');
+    if(!target)return;
+    const {name,capacity}=pp360ReadPlantDetails();
+    target.replaceChildren();
+    if(!window.pp360SignedIn||(!name&&!capacity)){target.hidden=true;return;}
+    if(name){const strong=document.createElement('strong');strong.textContent=name;target.appendChild(strong);}
+    if(capacity){const small=document.createElement('small');small.textContent='Installed Capacity: '+capacity.toLocaleString('en-IN',{maximumFractionDigits:3})+' MW';target.appendChild(small);}
+    target.hidden=false;
+  }
+  function pp360LoadPlantDetailsForm(){
+    const data=pp360ReadPlantDetails();
+    const name=document.getElementById('pp360PlantName'),capacity=document.getElementById('pp360PlantCapacity');
+    if(name)name.value=data.name;
+    if(capacity)capacity.value=data.capacity==null?'':String(data.capacity);
+    pp360RenderPlantIdentity();
+  }
+  window.savePlantDetails=function(e){
+    e?.preventDefault();
+    if(backendRole!=='admin')return;
+    const name=document.getElementById('pp360PlantName')?.value.trim()||'';
+    const raw=document.getElementById('pp360PlantCapacity')?.value.trim()||'';
+    const capacity=Number(raw);
+    const status=document.getElementById('pp360PlantDetailsStatus');
+    if(!name||!raw||!Number.isFinite(capacity)||capacity<=0||capacity>100000){
+      if(status)status.textContent='Enter the plant name and a valid installed capacity (MW).';
+      return;
+    }
+    try{
+      localStorage.setItem(PP360_PLANT_DETAILS_KEY,JSON.stringify({name:name.slice(0,100),capacity}));
+      pp360RenderPlantIdentity();
+      if(status)status.textContent='Saved successfully in this browser.';
+    }catch(_){if(status)status.textContent='Browser storage is unavailable. Could not save.';}
+  };
+  window.clearPlantDetails=function(){
+    if(backendRole!=='admin')return;
+    try{localStorage.removeItem(PP360_PLANT_DETAILS_KEY);}catch(_){}
+    pp360LoadPlantDetailsForm();
+    const status=document.getElementById('pp360PlantDetailsStatus');
+    if(status)status.textContent='Local plant details cleared.';
+  };
+  window.pp360RenderPlantIdentity=pp360RenderPlantIdentity;
+
   window.showAdminPanel = function(name, button) {
     if (backendRole !== 'admin') return;
 
@@ -3625,6 +3696,7 @@
       btn.classList.toggle('active', btn.getAttribute('data-admin-nav') === name);
     });
 
+    if (name === 'plant') pp360LoadPlantDetailsForm();
     if (name === 'documents') {
       const select = document.getElementById('filterCategory');
       if (select && !select.value) {
