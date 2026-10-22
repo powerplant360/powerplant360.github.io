@@ -4093,7 +4093,7 @@
       .filter(x=>x.score>=18).sort((x,y)=>y.score-x.score);
     if(!ranked.length)return [];
     const best=ranked[0].score;
-    return ranked.filter(x=>x.score>=Math.max(18,best*.75)).slice(0,4)
+    return ranked.filter(x=>x.score>=Math.max(18,best*.88)).slice(0,4)
       .sort((x,y)=>x.i-y.i).map(x=>x.i);
   }
 
