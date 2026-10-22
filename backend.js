@@ -1808,6 +1808,33 @@
     return d.document_type || 'Other';
   }
 
+  // Central document-index action renderer: used by Admin Stored Documents,
+  // Common Documents, and every equipment/section document view.
+  // Future document tabs should call pp360DocumentIndexAction(d), not duplicate rules.
+  function pp360DocumentIndexAction(d) {
+    if (backendRole !== 'admin' || !d?.id) return '';
+    const id = String(d.id);
+    const action = (fn,label) =>
+      '<button type="button" onclick="' + fn + '(\\'' + id + '\\')">' + esc(label) + '</button>';
+    if (isPdfDocument(d)) {
+      if (d.processing_status !== 'ready') return action('indexExistingPdf','Index PDF');
+      const processed = new Set(
+        (Array.isArray(d.metadata?.vision_indexed_pages) ? d.metadata.vision_indexed_pages : [])
+          .map(Number).filter(x => Number.isInteger(x) && x > 0)
+      ).size;
+      const remaining = weakPdfPages(d).length;
+      if (!remaining) return '<button type="button" disabled title="No weak/scanned pages left to index">Vision Complete</button>';
+      return action('visionIndexPdf', processed
+        ? 'Vision Index · ' + processed + ' / ' + (processed + remaining)
+        : 'Vision Index');
+    }
+    if (d.processing_status === 'ready') return '';
+    if (isIndexableImageFile(d)) return action('indexExistingImage','Index Image');
+    if (isIndexableOfficeFile(d)) return action('indexExistingOffice','Index Office');
+    return '<span class="muted small" title="Convert to PDF or DOCX for indexing">Not indexed</span>';
+  }
+  window.pp360DocumentIndexAction = pp360DocumentIndexAction;
+
   window.renderEquipmentDocuments = async function(category, sectionName) {
     const v = document.getElementById('view');
     if (!v) return;
@@ -1835,6 +1862,10 @@
     }
 
     const all = data || [];
+    // Keep the shared index actions working even if this section is opened
+    // before the Admin Stored Documents panel has populated its cache.
+    const seen = new Set(all.map(d => d.id));
+    docs = [...all, ...docs.filter(d => !seen.has(d.id))];
     const filtered = all.filter(d => matchesEquipmentSection(d, sectionName));
     const groups = {};
     for (const d of filtered) {
@@ -1852,9 +1883,10 @@
               <div class="equipment-doc-row">
                 <div class="equipment-doc-main">
                   <b>${esc(d.file_name)}</b>
-                  <div class="muted small">${esc(d.document_type || 'Other')} • ${formatBytes(d.file_size || 0)}${d.page_count ? ' • '+d.page_count+' pages' : ''}</div>
+                  <div class="muted small">${esc(d.document_type || 'Other')} • ${formatBytes(d.file_size || 0)}${d.page_count ? ' • '+d.page_count+' pages' : ''} • ${d.processing_status==='ready'?'Search ready':'Not yet searchable'}</div>
                 </div>
                 <div class="actions">
+                  ${pp360DocumentIndexAction(d)}
                   <button onclick="viewDocument('${d.id}')">View</button>
                 </div>
               </div>`).join('')}
@@ -3460,40 +3492,7 @@
 
     wrap.innerHTML = '<div class="admin-file-list">' +
       list.map(d => {
-        const visionPages = Array.isArray(d?.metadata?.vision_indexed_pages)
-          ? d.metadata.vision_indexed_pages.map(Number).filter(x => Number.isInteger(x) && x > 0)
-          : [];
-        const visionCount = new Set(visionPages).size;
-        const visionRemaining = isPdfDocument(d) ? weakPdfPages(d).length : 0;
-        const visionTotalWeak = visionCount + visionRemaining;
-        const visionComplete = isPdfDocument(d) && visionRemaining === 0;
-
-        const visionButtonLabel = visionComplete
-          ? 'Vision Complete'
-          : (visionCount
-              ? 'Vision Index · ' + visionCount + ' / ' + visionTotalWeak
-              : 'Vision Index');
-
-        const indexAction =
-          ((d.mime_type||'').includes('pdf') || (d.file_name||'').toLowerCase().endsWith('.pdf')) && d.processing_status !== 'ready'
-            ? '<button onclick="indexExistingPdf(\'' + d.id + '\')">Index PDF</button>'
-            : (
-                isPdfDocument(d) && d.processing_status === 'ready'
-                  ? (
-                      visionComplete
-                        ? '<button disabled>' + visionButtonLabel + '</button>'
-                        : '<button onclick="visionIndexPdf(\'' + d.id + '\')">' + visionButtonLabel + '</button>'
-                    )
-                  : (
-                      isIndexableImageFile(d) && d.processing_status !== 'ready'
-                        ? '<button onclick="indexExistingImage(\'' + d.id + '\')">Index Image</button>'
-                        : (
-                            isIndexableOfficeFile(d) && d.processing_status !== 'ready'
-                              ? '<button onclick="indexExistingOffice(\'' + d.id + '\')">Index Office</button>'
-                              : ''
-                          )
-                    )
-              );
+        const indexAction = pp360DocumentIndexAction(d);
 
         return '<div class="admin-file-row">' +
           '<div class="admin-file-name" title="' + esc(d.file_name || '') + '">' +
