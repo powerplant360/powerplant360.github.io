@@ -118,6 +118,25 @@ function reservoirLevelEvidence(question:string, text:string, fileName:string, s
   return levelPattern.test(hay);
 }
 
+// For reservoir level-to-capacity requests, require explicit level and volume evidence.
+// A page mentioning a reservoir and an unrelated equipment capacity is insufficient.
+function hasReservoirLevelVolumeEvidence(question:string, sourceText:string) {
+  const q = norm(question);
+  if (!/\b(reservoir|water tank|storage tank)\b/.test(q)) return true;
+  const requested = q.match(/\b(\d+(?:\.\d+)?)\s*(?:mtr|meter|metre|meters|metres|m)\b/) ||
+    q.match(/\b(?:level|at)\s*(\d+(?:\.\d+)?)\b/);
+  if (!requested) return true;
+  const text = String(sourceText || "").replace(/\s+/g, " ").toLowerCase();
+  if (!/\b(reservoir|water tank|storage tank)\b/.test(text)) return false;
+  const level = requested[1].replace(".", "\\.");
+  const levelMatch = new RegExp("(?:\\b" + level + "\\s*(?:mtr|meters?|metres?|m)\\b|\\b(?:level|at)\\s*[:=-]?\\s*" + level + "(?![0-9.]))", "g");
+  for (const match of text.matchAll(levelMatch)) {
+    const nearby = text.slice(Math.max(0, match.index - 85), match.index + match[0].length + 85);
+    if (/\b(?:\d[\d,.]*\s*(?:m3|m³|cu\.?\s*m|cubic\s*met(?:er|re)s?|kl|kilolit(?:er|re)s?|lit(?:er|re)s?|ltr|ltrs))\b/i.test(nearby)) return true;
+  }
+  return false;
+}
+
 function scoreChunk(question: string, text: string, fileName: string, category: string, sourcePath: string) {
   if (!reservoirLevelEvidence(question, text, fileName, sourcePath)) return 0;
   const q = norm(question);
@@ -559,6 +578,18 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Do not send unsupported reservoir level queries to the language model.
+    // A general equipment list can mention the reservoir but give no level/volume data.
+    if (!top.some(c => hasReservoirLevelVolumeEvidence(question, c.text))) {
+      return new Response(JSON.stringify({
+        answer_lines:["No exact plant-document match found."],
+        sources:[],
+        web_sources:[],
+        source_type:"plant",
+        scope
+      }), { headers:{ ...corsHeaders, "Content-Type":"application/json" } });
+    }
+
     const context = top.map((c, i) =>
       `[SOURCE ${i}]\nEquipment: ${c.category || ""}\nDocument: ${c.file_name || ""}\nPages: ${c.page ?? ""}${c.page_end && c.page_end !== c.page ? "–" + c.page_end : ""}\nText: ${c.text}`
     ).join("\n\n");
@@ -678,7 +709,14 @@ source_indices must contain only the source numbers that directly support the an
       }));
 
     const answerLines = answerLinesSafe;
-    if (!parsed || !answerLines.length || isNoExact(answerLines)) {
+    // Reject bare ratings such as "Capacity: 3000" for a level-specific
+    // reservoir volume request. The answer must identify a volume unit.
+    const reservoirLevelAsked = /\b(reservoir|water tank|storage tank)\b/i.test(question) &&
+      (/\b\d+(?:\.\d+)?\s*(?:mtr|meter|metre|meters|metres|m)\b/i.test(question) ||
+       /\b(?:level|at)\s*\d+(?:\.\d+)?\b/i.test(question));
+    const verifiedAnswerUnits = !reservoirLevelAsked ||
+      answerLines.some((line:string) => /\b(?:m3|m³|cu\.?\s*m|cubic\s*met(?:er|re)s?|kl|kilolit(?:er|re)s?|lit(?:er|re)s?|ltr|ltrs)\b/i.test(line));
+    if (!parsed || !answerLines.length || isNoExact(answerLines) || !verifiedAnswerUnits) {
       await recordUsage(plantUsage, "plant", scope);
       return new Response(JSON.stringify({
         answer_lines:["No exact plant-document match found."],
