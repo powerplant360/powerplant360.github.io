@@ -4736,7 +4736,7 @@
                 ? ' · Pages ' + safePage + '–' + safeEnd
                 : ' · Page ' + safePage)
             : '');
-      const buttonLabel = isSheet ? 'View supporting spreadsheet' : 'View supporting document' + pageLabel;
+      const buttonLabel = 'View source: ' + fileName + (src.category ? ' · '+String(src.category) : '') + pageLabel;
       const sourceFocus=encodeURIComponent(JSON.stringify({
         query:String(document.getElementById('q')?.value||'').slice(0,350),
         answerLines:cleanedLines.slice(0,15),
@@ -4745,7 +4745,7 @@
       })).replace(/'/g,'%27');
       buttons.push('<button onclick="viewDocument(\'' + id + '\',' + (safePage||'null') +
         ',\'' + sourceFocus + '\')">' + buttonLabel + '</button>');
-      if (buttons.length >= 3) break;
+      if (buttons.length >= 5) break;
     }
 
     const plantActions = buttons.length

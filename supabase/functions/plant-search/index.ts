@@ -660,9 +660,17 @@ Deno.serve(async (req) => {
 
     chunks.sort((a,b) => b.score - a.score);
 
-    // Deduplicate overlapping windows, not entire document pages.
-    // One DOCX often has a single extracted page containing dozens of tables.
+    // Evidence diversity: select the strongest window per document first,
+    // then add complementary windows. A single long Common DOCX must not
+    // crowd out independently applicable departmental documents.
     const ranked:Array<any> = [];
+    const chosenIds=new Set<string>();
+    for(const c of chunks){
+      if(chosenIds.has(String(c.document_id)))continue;
+      chosenIds.add(String(c.document_id));
+      ranked.push(c);
+      if(ranked.length>=5)break;
+    }
     for (const c of chunks) {
       const overlaps = ranked.some(x =>
         x.document_id === c.document_id &&
@@ -672,7 +680,7 @@ Deno.serve(async (req) => {
       if (overlaps) continue;
       if (ranked.filter(x=>x.document_id===c.document_id).length>=3)continue;
       ranked.push(c);
-      if (ranked.length >= 8) break;
+      if (ranked.length >= 12) break;
     }
 
     // Technical tables often continue onto the next PDF page. Append that page
@@ -731,6 +739,9 @@ Rules:
 - RESERVOIR/TANK EXCEPTION: when "Reservoir dual-value query" is YES and the supplied plant context contains both values at the requested level, ALWAYS return exactly two separate lines: "Total Volume : <value>" and "Usable Stock : <value>". Never omit either value.
 - For reservoir/tank level queries, use only values explicitly shown for that requested level. Do not interpolate, calculate, estimate, or mix values from another level.
 - Multiple values/specifications explicitly requested by the user: return one parameter per line.
+- Synthesize complementary, non-contradictory evidence from multiple relevant departmental and Common documents. Never restrict an answer to the first matching uploaded document.
+- When multiple documents contain the same measurement, preserve conditions and prefer more directly applicable equipment and revision context. If credible sources conflict, identify the disagreement rather than blending values.
+- Include ALL directly supporting source indices for the answer, not merely the first matching document. Do NOT include an unrelated source merely to increase the citation count.
 - If the question is only an equipment/component name (for example "initial filling pump") and does not ask for one specific field, return ALL clearly associated technical specifications available in that equipment's table/record, one parameter per line.
 - CFBC Boiler terminology: "DCF" means "Drag Chain Feeder" / "Drag Chain Feeders". For a bare DCF query, return "DCF : Drag Chain Feeder(s)" when supported by the supplied plant context.
 - CHP terminology: "Pre-Screen" and "Primary Screen" are the same equipment; "Post-Screen" and "Secondary Screen" are the same equipment.
@@ -827,10 +838,11 @@ source_indices must contain only the source numbers that directly support the an
         seen.add(x.document_id);
         return true;
       })
-      .slice(0,3)
+      .slice(0,5)
       .map((x:any) => ({
         document_id:x.document_id,
         file_name:x.file_name,
+        category:x.category,
         page:x.page,
         page_end:x.page_end || x.page,
         // Blank means no reliable anchor; never use an arbitrary prefix.
