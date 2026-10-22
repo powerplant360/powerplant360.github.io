@@ -2805,7 +2805,9 @@
           status.innerHTML = '<span class="errtext">Upload saved, but Office indexing failed: ' + esc(indexErr.message || String(indexErr)) + '</span>';
         }
       } else {
-        status.innerHTML = '<span class="oktext">✓ Secure upload completed</span>';
+        // Stored does not mean indexed: legacy .doc and other unsupported formats
+        // remain downloadable but cannot be used as Plant Data evidence.
+        status.innerHTML = '<span class="notice">✓ File stored securely — not indexed for Plant Data search. Convert to a text-based PDF or DOCX and upload again to make its contents searchable.</span>';
       }
 
       if (!options.suppressReload) {
