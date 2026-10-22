@@ -3925,7 +3925,7 @@
       if (hits.length) {
         renderTabs();
         document.getElementById('view').innerHTML = renderPrivateHits(raw, hits);
-        window.pp360RememberSearchAnswer?.(raw);
+        window.pp360RememberSearchAnswer?.(raw, typeof payload !== 'undefined' ? payload : null);
         return;
       }
     }
@@ -4158,7 +4158,7 @@
       await new Promise(resolve => setTimeout(resolve, 140));
       renderTabs();
       document.getElementById('view').innerHTML = renderRagAnswer(payload);
-      window.pp360RememberSearchAnswer?.(raw);
+      window.pp360RememberSearchAnswer?.(raw, typeof payload !== 'undefined' ? payload : null);
     } catch (err) {
       if (progress) progress.stop();
       const rawMessage = String(err?.message || err || 'Unknown Plant AI error');
@@ -4237,7 +4237,7 @@
       saveSearchHistory();
       renderTabs();
       document.getElementById('view').innerHTML = renderRagAnswer(payload);
-      window.pp360RememberSearchAnswer?.(raw);
+      window.pp360RememberSearchAnswer?.(raw, typeof payload !== 'undefined' ? payload : null);
     } catch (err) {
       const safeMessage = String(err?.message || err || 'Unknown online search error')
         .replace(/sk-[A-Za-z0-9_-]+/g, '[hidden API key]')
