@@ -4129,7 +4129,27 @@
     const ranked=blocks.map((line,i)=>({
       i,score:pp360FocusScore(line,focus,[blocks[i+1]||'',blocks[i+2]||''].join(' '))
     })).filter(x=>x.score>=18).sort((x,y)=>y.score-x.score);
-    if(!ranked.length)return [];
+    if(!ranked.length){
+      // Only navigate to a related source when the returned answer itself
+      // explicitly names the different shaft parameter. Never label this
+      // as a verified bearing measurement.
+      const answer=String((focus.answerLines||[])[0]||'');
+      const label=answer.split(':')[0];
+      if(/bearing/i.test(focus.query||'') && /\bshaft\b/i.test(label)){
+        const required=pp360FocusWords(label);
+        const values=pp360FocusNumbers(answer);
+        const exact=[];
+        blocks.forEach((line,i)=>{
+          const words=new Set(pp360FocusWords(line));
+          if(required.length<3||!required.every(w=>words.has(w)))return;
+          const nearby=[line,blocks[i+1]||'',blocks[i+2]||''].join(' ').replace(/,/g,'');
+          if(values.length && !values.some(v=>new RegExp('(^|[^0-9.])'+v.replace(/\./g,'\\.')+'(?![0-9.])').test(nearby)))return;
+          exact.push(i);
+        });
+        return exact.slice(0,1);
+      }
+      return [];
+    }
     const best=ranked[0].score;
     return ranked.filter(x=>x.score>=Math.max(18,best*.94)).slice(0,3)
       .sort((x,y)=>x.i-y.i).map(x=>x.i);
@@ -4167,7 +4187,10 @@
     target.replaceChildren(fragment);
     const status=document.getElementById('pp360WordMatchStatus');
     if(status)status.textContent=focus
-      ? (indexes.length?indexes.length+' closest text match'+(indexes.length===1?'':'es')+' highlighted':
+      ? (indexes.length?(/bearing/i.test(focus.query||'') && /\bshaft\b/i.test(String((focus.answerLines||[])[0]||'')) &&
+          indexes.some(i=>/\bshaft\b/i.test(blocks[i]) && !/\bbearing\b/i.test(blocks[i]))
+          ? 'Related shaft-vibration passage; bearing limit NOT verified'
+          : indexes.length+' closest text match'+(indexes.length===1?'':'es')+' highlighted'):
           'No reliable matching passage found. Try Find or inspect the document.')
       :'';
     if(focusNode){
