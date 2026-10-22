@@ -137,6 +137,44 @@ function hasReservoirLevelVolumeEvidence(question:string, sourceText:string) {
   return false;
 }
 
+// Resolve numeric reservoir levels from the source spreadsheet's actual table rows.
+// This avoids treating comma-separated spreadsheet columns as unlabelled prose.
+function exactReservoirCapacity(question:string, docs:any[]) {
+  const q = norm(question);
+  if (!/\b(reservoir|water tank|storage tank)\b/.test(q) ||
+      !/\b(capacity|volume|stock|level|mtr|meter|metre)\b/.test(q)) return null;
+  const requested = q.match(/\b(\d+(?:\.\d+)?)\s*(?:mtr|meter|metre|meters|metres|m)\b/) ||
+    q.match(/\b(?:level|at)\s*(\d+(?:\.\d+)?)\b/);
+  if (!requested) return null;
+  const target = Number(requested[1]);
+  if (!Number.isFinite(target)) return null;
+  const suctionDatum = /\b(suction datum|datum level|pump suction)\b/.test(q);
+  for (const doc of docs) {
+    if (!/\.(xlsx|xls|csv)$/i.test(String(doc.file_name||""))) continue;
+    const raw = String(doc.extracted_text||"");
+    if (!/raw water reservoir/i.test(raw) ||
+        !/bed depth\s*\(m\)\s*,\s*usable stock\s*\(m[³3]\)\s*,\s*total volume\s*\(m[³3]\)\s*,\s*suction datum level\s*\(m\)/i.test(raw)) continue;
+    for (const line of raw.split(/\r?\n/)) {
+      const fields = line.split(",").map(x=>x.trim());
+      if (fields.length < 4) continue;
+      const bed = Number(fields[0].replace(/\s*m\s*$/i,""));
+      const usable = Number(fields[1]);
+      const total = Number(fields[2]);
+      const datum = Number(fields[3].replace(/\s*m\s*$/i,""));
+      if (![bed,usable,total,datum].every(Number.isFinite)) continue;
+      if (Math.abs((suctionDatum?datum:bed)-target)>0.00001) continue;
+      const format=(n:number)=>n.toLocaleString("en-US",{maximumFractionDigits:1});
+      return {
+        answer_lines:["Total Volume : "+format(total)+" m³","Usable Stock : "+format(usable)+" m³"],
+        sources:[{document_id:doc.id,file_name:doc.file_name,page:1,page_end:1}],
+        web_sources:[],
+        source_type:"plant"
+      };
+    }
+  }
+  return null;
+}
+
 function scoreChunk(question: string, text: string, fileName: string, category: string, sourcePath: string) {
   if (!reservoirLevelEvidence(question, text, fileName, sourcePath)) return 0;
   const q = norm(question);
@@ -497,6 +535,30 @@ Deno.serve(async (req) => {
         source_type:"plant",
         scope
       }), {
+        headers:{ ...corsHeaders, "Content-Type":"application/json" }
+      });
+    }
+
+    // Prefer exact reservoir spreadsheet rows over fuzzy text search or AI inference.
+    const isNumericReservoir = /\b(reservoir|water tank|storage tank)\b/.test(norm(question)) &&
+      /\b\d+(?:\.\d+)?\s*(?:mtr|meter|metre|meters|metres|m)\b/.test(norm(question));
+    let reservoirDocs = docs;
+    if (isNumericReservoir) {
+      const { data: spreadsheetDocs, error: spreadsheetError } = await supabase
+        .from("documents")
+        .select("id,file_name,category,extracted_text")
+        .eq("processing_status", "ready")
+        .eq("category", scope)
+        .ilike("file_name", "%reservoir%")
+        .not("extracted_text", "is", null)
+        .limit(15);
+      if (spreadsheetError) throw spreadsheetError;
+      reservoirDocs = spreadsheetDocs || docs;
+    }
+    const reservoirRow = exactReservoirCapacity(question, reservoirDocs);
+    if (reservoirRow) {
+      await recordUsage(null, "plant", scope);
+      return new Response(JSON.stringify({ ...reservoirRow, scope }), {
         headers:{ ...corsHeaders, "Content-Type":"application/json" }
       });
     }
