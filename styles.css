@@ -2258,3 +2258,57 @@ body.auth-ready>header:has(#headerClock) .header-clock small{font-size:12px}
   body.auth-ready>header:has(#headerClock) .header-clock strong{font-size:15px}
   body.auth-ready>header:has(#headerClock) .header-clock small{font-size:10px}
 }
+
+/* Corporate and Serious — reference palette:
+   Oxford #022140, blue #265077, slate #494B68, deep teal #1E4258,
+   green teal #2D5F5D. Shared design tokens for every existing/future tab. */
+:root{
+  --pp-corporate-oxford:#022140;
+  --pp-corporate-blue:#265077;
+  --pp-corporate-slate:#494B68;
+  --pp-corporate-deep-teal:#1E4258;
+  --pp-corporate-green:#2D5F5D;
+  --brand:#022140;
+  --accent:#265077;
+  --bg:#f2f5f8;
+  --card:#ffffff;
+  --ink:#142d43;
+  --muted:#526475;
+  --line:#cdd9e2;
+  --soft:#e9eff4;
+}
+body.dark{
+  --brand:#022140;
+  --accent:#4c99d1;
+  --bg:#071828;
+  --card:#11283b;
+  --ink:#edf5fb;
+  --muted:#b7c9d6;
+  --line:#35536a;
+  --soft:#1e4258;
+}
+header,body.auth-ready>header{background:#022140}
+body:not(.auth-locked) #appShell .hero,.hero{
+  background:linear-gradient(125deg,#022140 0%,#1e4258 48%,#265077 100%);
+  color:#f5f9fd;
+}
+.admin-dashboard-head,.adminhead{border-color:var(--line)}
+body.dark .admin-dashboard-head,body.dark .adminhead{background:#1e4258;color:#fff}
+body:not(.dark) .admin-dashboard-head,body:not(.dark) .adminhead{background:#e9eff4;color:#142d43}
+.admin-side-btn.active,.side-tabs button.active,nav button.active{
+  background:#265077;
+  border-color:#265077;
+  color:#fff;
+}
+body.dark .admin-side-btn.active,body.dark .side-tabs button.active{background:#265077;color:#fff}
+body:not(.dark) .admin-side-btn.active{background:#265077;color:#fff}
+.member-department-grid button:hover,.dept-filter-btn.active{border-color:#2d5f5d}
+body.dark .member-department-grid button:hover{background:#1e4258}
+.primary,.search button:not(#onlineSearchBtn),#plantSearchBtn{background:#265077;color:#fff}
+.primary:hover,#plantSearchBtn:hover{background:#1e4258}
+#onlineSearchBtn{background:#2d5f5d;color:#fff}
+#onlineSearchBtn:hover{background:#1e4258}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{
+  outline:3px solid #4aaed8;
+  outline-offset:2px;
+}
