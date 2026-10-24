@@ -2400,3 +2400,11 @@ header .brand-block .pp360-brand-icon{width:30px;height:30px;flex-basis:30px;bor
 header .brand-block .pp360-brand-copy>b{font-size:clamp(14px,3.7vw,19px)!important}
 header .brand-block .pp360-brand-copy>small{display:none}
 }
+
+
+/* Header and login use the same approved two-chimney industrial mark. */
+.auth-logo .pp360-login-logo{display:inline-block;object-fit:contain;background:#f8fbfc;border-radius:9px;padding:2px;vertical-align:middle;flex:none}
+.managed-username-editor{display:flex;gap:6px;align-items:center;min-width:185px}
+.managed-username-editor input{min-width:125px;max-width:175px;padding:7px 8px}
+.managed-username-editor button{white-space:nowrap}
+@media(max-width:600px){.managed-username-editor{flex-wrap:wrap}.managed-username-editor input{max-width:100%}}
