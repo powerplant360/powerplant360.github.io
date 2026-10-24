@@ -1,13 +1,13 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#0b3155"/>
-      <stop offset="1" stop-color="#0b78d0"/>
-    </linearGradient>
-  </defs>
-  <rect width="512" height="512" rx="108" fill="url(#g)"/>
-  <circle cx="256" cy="256" r="150" fill="none" stroke="#ffffff" stroke-width="18" opacity=".95"/>
-  <path d="M256 106v300M106 256h300M150 150l212 212M362 150L150 362" stroke="#ffffff" stroke-width="16" stroke-linecap="round" opacity=".32"/>
-  <circle cx="256" cy="256" r="48" fill="#ffd166"/>
-  <text x="256" y="458" text-anchor="middle" font-family="Arial,sans-serif" font-size="48" font-weight="700" fill="#ffffff">PP360</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="PowerPlant360 power plant symbol">
+<title>PowerPlant360 industrial plant symbol</title>
+<rect width="128" height="128" rx="24" fill="#f8fbfc"/>
+<g fill="#102a40" stroke="#102a40" stroke-width="2.7" stroke-linejoin="round" stroke-linecap="round">
+<path d="M9 95V70h29V95zm26 0V51h21V95zm17 0V42h27V95zm26 0V66h20V95z" fill="#102a40"/>
+<path d="M14 75h18v5H14zm26-18h11v8H40zm17-9h17v5H57zM83 72h11v6H83z" fill="#f8fbfc" stroke="none"/>
+<path d="M43 90V67h27v23M43 67l27 23M70 67L43 90" fill="none" stroke="#f8fbfc" stroke-width="2.6"/>
+<path d="M82 27h10v68H82zm23-11h11v79h-11z" fill="#102a40"/>
+<path d="M82 36h10v9H82zm0 54h10v5H82zm23-58h11v10h-11zm0 22h11v11h-11z" fill="#f8fbfc" stroke="none"/>
+<path d="M80 27h14M103 16h15" fill="none" stroke-width="3"/>
+<path d="M8 98h113" stroke-width="5"/>
+</g>
 </svg>
