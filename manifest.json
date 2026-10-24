@@ -6,7 +6,7 @@
   "scope": "./",
   "display": "standalone",
   "background_color": "#f4f7fb",
-  "theme_color": "#0b3155",
+  "theme_color": "#12344c",
   "description": "Secure engineering knowledge assistant for authorized power plant users",
   "categories": [
     "productivity",
@@ -14,7 +14,7 @@
   ],
   "icons": [
     {
-      "src": "icon.svg",
+      "src": "icon.svg?v=2",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any maskable"
