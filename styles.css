@@ -2360,3 +2360,17 @@ body:not(.dark) nav button.active{background:#345e79;color:#fff}
 body:not(.dark) .admin-dashboard-head,
 body:not(.dark) .adminhead{background:#edf2f3;color:#203848}
 body:not(.dark) .card{border-color:#d5e0e4}
+
+
+/* Shared calculator formula block directly under the title on every device. */
+.power-calc-card > .power-calc-formula{
+  margin:4px 0 16px;
+  padding:10px 12px;
+  border-left:3px solid var(--accent);
+  border-radius:6px;
+  background:var(--soft);
+  color:var(--ink);
+  font-size:clamp(13px,1vw,15px);
+  line-height:1.55;
+  overflow-wrap:anywhere;
+}
