@@ -2412,7 +2412,9 @@
     try{
     const emailEl = document.getElementById('loginEmail');
     const passwordEl = document.getElementById('loginPassword');
-    const email = emailEl?.value.trim() || '';
+    const entered = emailEl?.value.trim() || '';
+    const isEmail = entered.includes('@');
+    const email = isEmail ? entered : '';
     const password = passwordEl?.value || '';
     const msg = document.getElementById('loginMsg');
 
