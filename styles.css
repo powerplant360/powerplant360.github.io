@@ -2312,3 +2312,51 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{
   outline:3px solid #4aaed8;
   outline-offset:2px;
 }
+
+
+/* Eye-friendly daytime theme: low-glare surfaces and readable corporate blues.
+   Scoped to LIGHT theme only. Dark theme and engineering status colors remain unchanged. */
+body:not(.dark){
+  --bg:#f3f6f6;
+  --card:#fcfdfc;
+  --soft:#e9f0f1;
+  --ink:#203848;
+  --muted:#526878;
+  --line:#d5e0e4;
+  --accent:#345e79;
+  --brand:#12344c;
+}
+body:not(.dark) > header,
+body:not(.dark).auth-ready > header{background:#12344c;color:#f4f8fa}
+body:not(.dark) #appShell .hero{
+  background:linear-gradient(120deg,#254b63 0%,#35677b 100%);
+  color:#f8fcfd;
+}
+body:not(.dark) #appShell .hero input,
+body:not(.dark) #appShell .hero select{
+  background:#fbfdfc;
+  color:#203848;
+  border:1px solid #bed0d7;
+}
+body:not(.dark) #appShell .hero input::placeholder{color:#718693}
+body:not(.dark) .member-departments-panel,
+body:not(.dark) .app-sidebar,
+body:not(.dark) .admin-main-panel{background:#fcfdfc;color:#203848}
+body:not(.dark) .member-dashboard-compact .member-department-grid button{
+  background:#eef3f4;color:#244155;border:1px solid #d4e1e5;
+}
+body:not(.dark) .member-dashboard-compact .member-department-grid button:hover{
+  background:#e1ebed;border-color:#7099a6;
+}
+body:not(.dark) .primary,
+body:not(.dark) #plantSearchBtn{background:#345e79;color:#fff}
+body:not(.dark) #onlineSearchBtn{background:#356962;color:#fff}
+body:not(.dark) .primary:hover,
+body:not(.dark) #plantSearchBtn:hover{background:#274d67}
+body:not(.dark) #onlineSearchBtn:hover{background:#28564f}
+body:not(.dark) .admin-side-btn.active,
+body:not(.dark) .side-tabs button.active,
+body:not(.dark) nav button.active{background:#345e79;color:#fff}
+body:not(.dark) .admin-dashboard-head,
+body:not(.dark) .adminhead{background:#edf2f3;color:#203848}
+body:not(.dark) .card{border-color:#d5e0e4}
