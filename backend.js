@@ -66,7 +66,7 @@
   function pp360RememberLogin(user){
     if(!user?.email)return;
     const email=String(user.email).trim().toLowerCase();
-    const name=String(user.user_metadata?.username||user.user_metadata?.display_name||
+    const name=String(user.app_metadata?.pp360_username||user.user_metadata?.username||user.user_metadata?.display_name||
       user.user_metadata?.full_name||email.split('@')[0]).trim().slice(0,55);
     const item={email,name};
     const values=[item,...pp360RecentAccounts().filter(x=>x.email.toLowerCase()!==email)].slice(0,5);
@@ -112,8 +112,8 @@
       '<div class="auth-eyebrow">AUTHORIZED MEMBER ACCESS</div>' +
       '<h1>Welcome back</h1>' +
       '<p class="auth-help">Sign in to your engineering workspace. One secure login for Admin, Engineer and Viewer accounts.</p>' +
-      '<label for="loginEmail">Email or recently used username</label>' +
-      '<input id="loginEmail" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="Email or recent username">' +
+      '<label for="loginEmail">Username or Email</label>' +
+      '<input id="loginEmail" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="Enter username or email address">' +
       pp360RecentLoginOptions() +
       '<label for="loginPassword">Password</label>' +
       '<div class="auth-password-wrap"><input id="loginPassword" type="password" autocomplete="current-password" placeholder="Password"><button type="button" class="auth-password-toggle" aria-label="Show password" aria-pressed="false" onclick="toggleAuthPassword(\'loginPassword\',this)">Show</button></div>' +
@@ -164,8 +164,8 @@
     const btn = document.getElementById('resetRequestBtn');
     const msg = document.getElementById('resetMsg');
     const entered = emailEl?.value.trim() || '';
-    const recentMatches=pp360RecentAccounts().filter(x=>x.name.toLowerCase()===entered.toLowerCase());
-    const email=entered.includes('@')?entered:(recentMatches.length===1?recentMatches[0].email:'');
+    const isEmail=entered.includes('@');
+    const email=isEmail?entered:'';
 
     if (!email || !email.includes('@')) {
       if (msg) msg.textContent = 'Enter a valid email address.';
@@ -2299,6 +2299,10 @@
                   <input id="newUserEmail" type="email" autocomplete="off" placeholder="engineer@example.com">
                 </div>
                 <div>
+                  <label for="newUserUsername">Username (optional)</label>
+                  <input id="newUserUsername" type="text" minlength="3" maxlength="30" autocomplete="off" placeholder="e.g. plantengineer01">
+                </div>
+                <div>
                   <label for="newUserPassword">Temporary password</label>
                   <input id="newUserPassword" type="password" autocomplete="new-password" placeholder="Minimum 8 characters">
                 </div>
@@ -2404,14 +2408,33 @@
     const password = passwordEl?.value || '';
     const msg = document.getElementById('loginMsg');
 
-    if (!email || !password) {
-      if (msg) msg.textContent = entered&&!email?'Username not recognized on this device. Use your email address or select a recent account.':'Enter your email or saved username and password.';
+    if (!entered || !password) {
+      if (msg) msg.textContent = 'Enter your username or email and password.';
       return;
     }
 
     if (msg) msg.textContent = 'Signing in…';
 
-    const { data, error } = await client().auth.signInWithPassword({ email, password });
+    let data=null,error=null;
+    if(isEmail){
+      ({data,error}=await client().auth.signInWithPassword({email,password}));
+    }else{
+      try{
+        if(!/^[a-z][a-z0-9._-]{2,29}$/i.test(entered))throw new Error('Invalid username or password.');
+        const endpoint=cfg.supabaseUrl.replace(/\/+$/,'')+'/functions/v1/username-login';
+        const response=await fetch(endpoint,{
+          method:'POST',
+          headers:{'Content-Type':'application/json','apikey':cfg.supabaseKey},
+          body:JSON.stringify({identifier:entered,password})
+        });
+        const result=await response.json();
+        if(!response.ok)throw new Error(result?.error||'Invalid username or password.');
+        const session=await client().auth.setSession({
+          access_token:result.access_token,refresh_token:result.refresh_token
+        });
+        data=session.data;error=session.error;
+      }catch(err){error={message:err?.message||'Invalid username or password.'};}
+    }
     if (error) {
       if (msg) msg.textContent = error.message;
       return;
@@ -2787,7 +2810,7 @@
 
       wrap.innerHTML =
         '<div class="user-table-scroll"><table class="user-table">' +
-          '<thead><tr><th scope="col">Email</th><th scope="col">Role</th><th scope="col">Created</th><th scope="col">Last Sign-in</th><th scope="col">Actions</th></tr></thead><tbody>' +
+          '<thead><tr><th scope="col">Email</th><th scope="col">Username</th><th scope="col">Role</th><th scope="col">Created</th><th scope="col">Last Sign-in</th><th scope="col">Actions</th></tr></thead><tbody>' +
           users.map(u => {
             const role = String(u?.role || 'viewer').toLowerCase();
             const isAdmin = role === 'admin';
@@ -2809,6 +2832,7 @@
 
             return '<tr class="managed-user-row">' +
               '<td data-label="Email" class="managed-user-email"><b>' + esc(String(u.email || '')) + '</b>' + (isCurrent ? '<div class="muted small">Signed in now</div>' : '') + '</td>' +
+              '<td data-label="Username"><div class="managed-username-editor"><input type="text" id="username-' + esc(u.id) + '" maxlength="30" value="' + esc(String(u.username || '')) + '" placeholder="Set username"><button type="button" onclick="saveManagedUsername(\'' + esc(u.id) + '\')">Save</button></div></td>' +
               '<td data-label="Role">' + roleCell + '</td>' +
               '<td data-label="Created">' + esc(managedUserDate(u?.created_at)) + '</td>' +
               '<td data-label="Last Sign-in">' + esc(managedUserDate(u?.last_sign_in_at)) + '</td>' +
@@ -2822,11 +2846,29 @@
   }
   window.loadUserManagement = loadUserManagement;
 
+  window.saveManagedUsername=async function(userId){
+    if(backendRole!=='admin')return;
+    const msg=document.getElementById('userManageMsg');
+    const field=document.getElementById('username-'+userId);
+    const username=field?.value.trim().toLowerCase()||'';
+    if(username&&!/^[a-z][a-z0-9._-]{2,29}$/.test(username)){
+      if(msg)msg.textContent='Username must have 3–30 characters and begin with a letter.';
+      return;
+    }
+    try{
+      if(msg)msg.textContent='Saving username…';
+      await callManageUsers({action:'set_username',user_id:userId,username});
+      if(msg)msg.textContent='Username updated successfully.';
+      await loadUserManagement();
+    }catch(err){if(msg)msg.textContent='Username update failed: '+String(err?.message||err);}
+  };
+
   window.createManagedUser = async function () {
     if (backendRole !== 'admin') return;
 
     const emailEl = document.getElementById('newUserEmail');
     const passwordEl = document.getElementById('newUserPassword');
+    const usernameEl = document.getElementById('newUserUsername');
     const roleEl = document.getElementById('newUserRole');
     const btn = document.getElementById('createUserBtn');
     const msg = document.getElementById('userManageMsg');
@@ -2834,7 +2876,11 @@
     const email = emailEl?.value.trim() || '';
     const password = passwordEl?.value || '';
     const role = roleEl?.value || 'viewer';
-
+    const username=usernameEl?.value.trim().toLowerCase()||'';
+    if(username&&!/^[a-z][a-z0-9._-]{2,29}$/.test(username)){
+      if(msg)msg.textContent='Invalid username (3–30 characters, starts with a letter).';
+      usernameEl?.focus();return;
+    }
     if (!email || !email.includes('@')) {
       if (msg) msg.textContent = 'Enter a valid email address.';
       emailEl?.focus();
@@ -2854,11 +2900,13 @@
         action:'create',
         email,
         password,
-        role
+        role,
+        username
       });
 
       if (passwordEl) passwordEl.value = '';
       if (emailEl) emailEl.value = '';
+      if (usernameEl) usernameEl.value = '';
       if (msg) msg.textContent = '✓ User created. Open PowerPlant360 in an Incognito / Private window to test the login.';
       await loadUserManagement();
     } catch (err) {
