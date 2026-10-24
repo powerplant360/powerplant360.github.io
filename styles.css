@@ -2374,3 +2374,15 @@ body:not(.dark) .card{border-color:#d5e0e4}
   line-height:1.55;
   overflow-wrap:anywhere;
 }
+
+
+/* One readable formula explanation layout for every existing and future calculator. */
+.power-calc-card .calc-formula-simple strong,
+.power-calc-card .calc-formula-technical strong{display:block;font-size:.84rem;font-weight:750;margin-bottom:4px}
+.power-calc-card .calc-formula-simple p,
+.power-calc-card .calc-formula-technical p{margin:0;line-height:1.55;overflow-wrap:anywhere}
+.power-calc-card .calc-formula-simple{font-size:clamp(13px,1.05vw,15px);color:var(--ink)}
+.power-calc-card .calc-formula-technical{
+  border-top:1px solid var(--line);padding-top:9px;margin-top:11px;
+  font-size:clamp(12px,.93vw,14px);color:var(--muted)
+}
