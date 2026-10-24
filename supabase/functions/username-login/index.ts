@@ -23,7 +23,11 @@ Deno.serve(async(req:Request)=>{
     }
     const url=Deno.env.get("SUPABASE_URL")!;
     const anon=Deno.env.get("SUPABASE_ANON_KEY")!;
-    const serverKey=Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    let serverKey=Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")||"";
+    try{
+      const keys=JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS")||"{}");
+      serverKey=keys?.default||serverKey;
+    }catch(_){}
     if(!url||!anon||!serverKey)return respond({error:"Login temporarily unavailable."},503);
     const admin=createClient(url,serverKey,{auth:{persistSession:false,autoRefreshToken:false}});
     let email="";
