@@ -212,10 +212,10 @@ const CONVERTERS={"Pressure":{"bar":100000,"kPa":1000,"MPa":1000000,"kg/cm²":98
     return '<div class="power-calc-card" data-calc-id="'+esc(c.id)+'">'+
       '<div class="power-calc-card-head"><h4>'+esc(c.t)+'</h4>'+
       '<button type="button" class="calc-favorite-btn '+(fav?'active':'')+'" data-favorite-calc="'+esc(c.id)+'" aria-label="'+(fav?'Remove from favorites':'Add to favorites')+'" title="'+(fav?'Remove from favorites':'Add to favorites')+'">'+(fav?'★':'☆')+'</button></div>'+
+      '<div class="power-calc-formula" aria-label="Calculation formula">'+esc(c.f)+'</div>'+
       '<div class="power-calc-fields">'+fields+'</div>'+
       '<button class="primary calc-run-btn" type="button" data-run-calc="'+esc(c.id)+'">Calculate</button>'+
       '<div class="power-calc-result" aria-live="polite">Enter values and calculate.</div>'+
-      '<div class="power-calc-formula">'+esc(c.f)+'</div>'+
       (c.note?'<div class="power-calc-note">'+esc(c.note)+'</div>':'')+
       '</div>';
   }
