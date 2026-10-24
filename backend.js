@@ -113,7 +113,7 @@
       '<h1>Welcome back</h1>' +
       '<p class="auth-help">Sign in to your engineering workspace. One secure login for Admin, Engineer and Viewer accounts.</p>' +
       '<label for="loginEmail">Email or recently used username</label>' +
-      '<input id="loginEmail" type="email" autocomplete="username" placeholder="Email address">' +
+      '<input id="loginEmail" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="Email or recent username">' +
       pp360RecentLoginOptions() +
       '<label for="loginPassword">Password</label>' +
       '<div class="auth-password-wrap"><input id="loginPassword" type="password" autocomplete="current-password" placeholder="Password"><button type="button" class="auth-password-toggle" aria-label="Show password" aria-pressed="false" onclick="toggleAuthPassword(\'loginPassword\',this)">Show</button></div>' +
@@ -163,7 +163,9 @@
     const emailEl = document.getElementById('resetEmail');
     const btn = document.getElementById('resetRequestBtn');
     const msg = document.getElementById('resetMsg');
-    const email = emailEl?.value.trim() || '';
+    const entered = emailEl?.value.trim() || '';
+    const recentMatches=pp360RecentAccounts().filter(x=>x.name.toLowerCase()===entered.toLowerCase());
+    const email=entered.includes('@')?entered:(recentMatches.length===1?recentMatches[0].email:'');
 
     if (!email || !email.includes('@')) {
       if (msg) msg.textContent = 'Enter a valid email address.';
@@ -2403,7 +2405,7 @@
     const msg = document.getElementById('loginMsg');
 
     if (!email || !password) {
-      if (msg) msg.textContent = 'Enter your email and password.';
+      if (msg) msg.textContent = entered&&!email?'Username not recognized on this device. Use your email address or select a recent account.':'Enter your email or saved username and password.';
       return;
     }
 
