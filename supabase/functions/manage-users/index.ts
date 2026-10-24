@@ -54,14 +54,28 @@ Deno.serve(async(req)=>{
     const body=await req.json().catch(()=>({}));
     const action=String(body?.action||"list").trim();
 
+    const usernamePattern=/^[a-z][a-z0-9._-]{2,29}$/;
+    async function allUsers(){
+      const all:any[]=[];
+      for(let page=1;page<=20;page++){
+        const {data,error}=await admin.auth.admin.listUsers({page,perPage:1000});
+        if(error)throw error;
+        const batch=data?.users||[];
+        all.push(...batch);
+        if(batch.length<1000)return all;
+      }
+      throw new Error("User list exceeds management limit.");
+    }
+    async function uniqueUsername(username:string,ignoreId:string){
+      const users=await allUsers();
+      return !users.some((u:any)=>u.id!==ignoreId &&
+        String(u.app_metadata?.pp360_username||"").toLowerCase()===username);
+    }
+    function usernameFor(u:any){
+      return String(u?.app_metadata?.pp360_username||"");
+    }
     if(action==="list"){
-      const {data:listData,error:listError}=await admin.auth.admin.listUsers({
-        page:1,
-        perPage:1000
-      });
-      if(listError) throw listError;
-
-      const users=listData?.users||[];
+      const users=await allUsers();
       const ids=users.map((u:any)=>u.id);
       let roleRows:any[]=[];
 
@@ -78,6 +92,7 @@ Deno.serve(async(req)=>{
       const result=users.map((u:any)=>({
         id:u.id,
         email:u.email||"",
+        username:usernameFor(u),
         role:roleMap.get(u.id)||"viewer",
         created_at:u.created_at||null,
         last_sign_in_at:u.last_sign_in_at||null,
@@ -92,7 +107,10 @@ Deno.serve(async(req)=>{
       const email=String(body?.email||"").trim().toLowerCase();
       const password=String(body?.password||"");
       const role=String(body?.role||"viewer").trim().toLowerCase();
+      const username=String(body?.username||"").trim().toLowerCase();
 
+      if(username && !usernamePattern.test(username))return json({error:"Username must be 3–30 characters, starting with a letter; use only letters, digits, dot, underscore or hyphen."},400);
+      if(username && !(await uniqueUsername(username,"")))return json({error:"Username is already in use."},409);
       if(!email||!email.includes("@")) return json({error:"Enter a valid email address."},400);
       if(password.length<8) return json({error:"Temporary password must be at least 8 characters."},400);
       if(!["engineer","viewer"].includes(role)) return json({error:"Role must be Engineer or Viewer."},400);
@@ -101,7 +119,8 @@ Deno.serve(async(req)=>{
         email,
         password,
         email_confirm:true,
-        user_metadata:{created_via:"PowerPlant360 Admin"}
+        user_metadata:{created_via:"PowerPlant360 Admin"},
+        app_metadata:username?{pp360_username:username}:{}
       });
       if(createError) return json({error:createError.message},400);
 
@@ -122,6 +141,7 @@ Deno.serve(async(req)=>{
         user:{
           id:newUser.id,
           email:newUser.email||email,
+          username,
           role,
           created_at:newUser.created_at||null,
           last_sign_in_at:newUser.last_sign_in_at||null,
@@ -129,6 +149,22 @@ Deno.serve(async(req)=>{
           is_current:false
         }
       });
+    }
+
+    if(action==="set_username"){
+      const userId=String(body?.user_id||"").trim();
+      const username=String(body?.username||"").trim().toLowerCase();
+      if(!userId)return json({error:"User ID is required."},400);
+      if(username && !usernamePattern.test(username))return json({error:"Username must be 3–30 characters and contain only letters, numbers, dot, underscore or hyphen; it must begin with a letter."},400);
+      const {data:target,error:fetchError}=await admin.auth.admin.getUserById(userId);
+      if(fetchError || !target?.user)return json({error:"User not found."},404);
+      if(username && !(await uniqueUsername(username,userId)))return json({error:"Username is already in use."},409);
+      const metadata={...(target.user.app_metadata||{})};
+      if(username)metadata.pp360_username=username;
+      else delete metadata.pp360_username;
+      const {error}=await admin.auth.admin.updateUserById(userId,{app_metadata:metadata});
+      if(error)throw error;
+      return json({ok:true,username});
     }
 
     if(action==="update_role"){
