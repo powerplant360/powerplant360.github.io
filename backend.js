@@ -53,6 +53,53 @@
     document.getElementById('authGate')?.scrollIntoView({block:'start'});
   };
 
+
+  // Only successful sign-ins are remembered on this device. No passwords or tokens.
+  const PP360_RECENT_ACCOUNTS='pp360:recent-login-accounts:v1';
+  function pp360RecentAccounts(){
+    try{
+      const a=JSON.parse(localStorage.getItem(PP360_RECENT_ACCOUNTS)||'[]');
+      return Array.isArray(a)?a.filter(x=>x&&typeof x.email==='string'&&/^[^@\s]+@[^@\s]+$/.test(x.email))
+        .slice(0,5):[];
+    }catch(_){return [];}
+  }
+  function pp360RememberLogin(user){
+    if(!user?.email)return;
+    const email=String(user.email).trim().toLowerCase();
+    const name=String(user.user_metadata?.username||user.user_metadata?.display_name||
+      user.user_metadata?.full_name||email.split('@')[0]).trim().slice(0,55);
+    const item={email,name};
+    const values=[item,...pp360RecentAccounts().filter(x=>x.email.toLowerCase()!==email)].slice(0,5);
+    try{localStorage.setItem(PP360_RECENT_ACCOUNTS,JSON.stringify(values));}catch(_){}
+  }
+  window.pp360PickRecentLogin=function(value){
+    const email=pp360RecentAccounts().find(x=>x.email===value)?.email;
+    const input=document.getElementById('loginEmail');
+    if(input&&email){input.value=email;document.getElementById('loginPassword')?.focus();}
+  };
+  function pp360RecentLoginOptions(){
+    const accounts=pp360RecentAccounts();
+    if(!accounts.length)return '';
+    return '<label for="pp360RecentLogin">Recently used accounts on this device</label>'+
+      '<select id="pp360RecentLogin" onchange="pp360PickRecentLogin(this.value)">'+
+      '<option value="">Choose username / email</option>'+
+      accounts.map(x=>'<option value="'+esc(x.email)+'">'+esc(x.name)+' — '+esc(x.email)+'</option>').join('')+
+      '</select>';
+  }
+  // Delegation survives any replacement of the search/login DOM.
+  document.addEventListener('keydown',event=>{
+    if(event.key!=='Enter'||event.isComposing||event.repeat||event.defaultPrevented)return;
+    const target=event.target;
+    if(target?.id==='q'){
+      event.preventDefault();event.stopImmediatePropagation();
+      if(!document.body.classList.contains('auth-locked') &&
+         !document.getElementById('plantSearchBtn')?.disabled)window.pp360Search?.();
+    }else if(target?.id==='loginEmail'||target?.id==='loginPassword'){
+      event.preventDefault();
+      if(!document.getElementById('loginSubmit')?.disabled)window.login?.();
+    }
+  },true);
+
   function showLoginGate(message='') {
     passwordRecoveryMode = false;
     document.body.classList.remove('auth-checking');
@@ -65,11 +112,12 @@
       '<div class="auth-eyebrow">AUTHORIZED MEMBER ACCESS</div>' +
       '<h1>Welcome back</h1>' +
       '<p class="auth-help">Sign in to your engineering workspace. One secure login for Admin, Engineer and Viewer accounts.</p>' +
-      '<label for="loginEmail">Email</label>' +
-      '<input id="loginEmail" type="email" autocomplete="username" placeholder="Email address">' +
+      '<label for="loginEmail">Email or recently used username</label>' +
+      '<input id="loginEmail" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="Email or recent username">' +
+      pp360RecentLoginOptions() +
       '<label for="loginPassword">Password</label>' +
       '<div class="auth-password-wrap"><input id="loginPassword" type="password" autocomplete="current-password" placeholder="Password"><button type="button" class="auth-password-toggle" aria-label="Show password" aria-pressed="false" onclick="toggleAuthPassword(\'loginPassword\',this)">Show</button></div>' +
-      '<button class="auth-primary" onclick="login()">Sign in securely <span aria-hidden="true">→</span></button>' +
+      '<button id="loginSubmit" class="auth-primary" onclick="login()">Sign in securely <span aria-hidden="true">→</span></button>' +
       '<button class="auth-link" onclick="showForgotPassword()">Forgot password?</button>' +
       '<div id="loginMsg" class="auth-message">' + esc(message || '') + '</div>';
 
@@ -115,7 +163,9 @@
     const emailEl = document.getElementById('resetEmail');
     const btn = document.getElementById('resetRequestBtn');
     const msg = document.getElementById('resetMsg');
-    const email = emailEl?.value.trim() || '';
+    const entered = emailEl?.value.trim() || '';
+    const recentMatches=pp360RecentAccounts().filter(x=>x.name.toLowerCase()===entered.toLowerCase());
+    const email=entered.includes('@')?entered:(recentMatches.length===1?recentMatches[0].email:'');
 
     if (!email || !email.includes('@')) {
       if (msg) msg.textContent = 'Enter a valid email address.';
@@ -2355,7 +2405,7 @@
     const msg = document.getElementById('loginMsg');
 
     if (!email || !password) {
-      if (msg) msg.textContent = 'Enter your email and password.';
+      if (msg) msg.textContent = entered&&!email?'Username not recognized on this device. Use your email address or select a recent account.':'Enter your email or saved username and password.';
       return;
     }
 
@@ -2380,6 +2430,7 @@
       return;
     }
 
+    pp360RememberLogin(data.user||data.session?.user);
     if (passwordEl) passwordEl.value = '';
     openAuthenticatedApp();
   };
@@ -4998,13 +5049,6 @@
     }
   };
 
-  const qInput = document.getElementById('q');
-  if (qInput) qInput.addEventListener('keydown', e => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      window.pp360Search();
-    }
-  });
 
   restoreBackendSession();
 
