@@ -94,9 +94,6 @@
       event.preventDefault();event.stopImmediatePropagation();
       if(!document.body.classList.contains('auth-locked') &&
          !document.getElementById('plantSearchBtn')?.disabled)window.pp360Search?.();
-    }else if(target?.id==='loginEmail'||target?.id==='loginPassword'){
-      event.preventDefault();
-      if(!document.getElementById('loginSubmit')?.disabled)window.login?.();
     }
   },true);
 
@@ -112,15 +109,22 @@
       '<div class="auth-eyebrow">AUTHORIZED MEMBER ACCESS</div>' +
       '<h1>Welcome back</h1>' +
       '<p class="auth-help">Sign in to your engineering workspace. One secure login for Admin, Engineer and Viewer accounts.</p>' +
+      '<form id="pp360LoginForm" autocomplete="on">' +
       '<label for="loginEmail">Username or Email</label>' +
-      '<input id="loginEmail" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="Enter username or email address">' +
+      '<input id="loginEmail" name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" enterkeyhint="next" placeholder="Enter username or email address">' +
       pp360RecentLoginOptions() +
       '<label for="loginPassword">Password</label>' +
-      '<div class="auth-password-wrap"><input id="loginPassword" type="password" autocomplete="current-password" placeholder="Password"><button type="button" class="auth-password-toggle" aria-label="Show password" aria-pressed="false" onclick="toggleAuthPassword(\'loginPassword\',this)">Show</button></div>' +
-      '<button id="loginSubmit" class="auth-primary" onclick="login()">Sign in securely <span aria-hidden="true">→</span></button>' +
+      '<div class="auth-password-wrap"><input id="loginPassword" name="password" type="password" autocomplete="current-password" enterkeyhint="go" placeholder="Password"><button type="button" class="auth-password-toggle" aria-label="Show password" aria-pressed="false" onclick="toggleAuthPassword(\'loginPassword\',this)">Show</button></div>' +
+      '<button id="loginSubmit" type="submit" class="auth-primary">Sign in securely <span aria-hidden="true">→</span></button>' +
+      '</form>' +
       '<button class="auth-link" onclick="showForgotPassword()">Forgot password?</button>' +
       '<div id="loginMsg" class="auth-message">' + esc(message || '') + '</div>';
 
+    const loginForm=document.getElementById('pp360LoginForm');
+    loginForm?.addEventListener('submit',event=>{
+      event.preventDefault();
+      if(!document.getElementById('loginSubmit')?.disabled)window.login?.();
+    });
     if (document.body.classList.contains('public-login-open')) {
       setTimeout(() => document.getElementById('loginEmail')?.focus(), 0);
     }
@@ -2402,6 +2406,10 @@
   };
 
   login = async function () {
+    const submitBtn=document.getElementById('loginSubmit');
+    if(submitBtn?.disabled)return;
+    if(submitBtn)submitBtn.disabled=true;
+    try{
     const emailEl = document.getElementById('loginEmail');
     const passwordEl = document.getElementById('loginPassword');
     const email = emailEl?.value.trim() || '';
@@ -2456,6 +2464,9 @@
     pp360RememberLogin(data.user||data.session?.user);
     if (passwordEl) passwordEl.value = '';
     openAuthenticatedApp();
+    }finally{
+      if(submitBtn?.isConnected)submitBtn.disabled=false;
+    }
   };
 
   logout = async function () {
