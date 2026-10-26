@@ -93,7 +93,9 @@ Deno.serve(async(req)=>{
         id:u.id,
         email:u.email||"",
         username:usernameFor(u),
-        role:roleMap.get(u.id)||"viewer",
+        role:roleMap.get(u.id)||"pending",
+        requested_username:String(u.user_metadata?.pp360_signup_username||""),
+        signup_request:!roleMap.has(u.id),
         created_at:u.created_at||null,
         last_sign_in_at:u.last_sign_in_at||null,
         email_confirmed_at:u.email_confirmed_at||null,
@@ -101,6 +103,40 @@ Deno.serve(async(req)=>{
       }));
 
       return json({users:result});
+    }
+
+    if(action==="approve_signup"){
+      const userId=String(body?.user_id||"").trim();
+      const role=String(body?.role||"viewer").toLowerCase();
+      if(!userId || !["viewer","engineer"].includes(role))return json({error:"Invalid approval request."},400);
+      const {data:target,error:targetError}=await admin.auth.admin.getUserById(userId);
+      if(targetError||!target?.user)return json({error:"Account not found."},404);
+      if(!target.user.email_confirmed_at)return json({error:"Applicant must verify their email before approval."},400);
+      const {data:existing,error:existingError}=await admin.from("user_roles").select("role").eq("user_id",userId).maybeSingle();
+      if(existingError)throw existingError;
+      if(existing)return json({error:"Account already has a role."},409);
+      const desired=String(target.user.user_metadata?.pp360_signup_username||"").trim().toLowerCase();
+      if(desired && (!usernamePattern.test(desired)||!(await uniqueUsername(desired,userId)))){
+        return json({error:"Requested username is invalid or already taken. Edit username after approval or ask applicant to use email."},409);
+      }
+      if(desired){
+        const metadata={...(target.user.app_metadata||{}),pp360_username:desired};
+        const {error:metaError}=await admin.auth.admin.updateUserById(userId,{app_metadata:metadata});
+        if(metaError)throw metaError;
+      }
+      const {error:insertError}=await admin.from("user_roles").insert({user_id:userId,role});
+      if(insertError)throw insertError;
+      return json({ok:true,role});
+    }
+    if(action==="reject_signup"){
+      const userId=String(body?.user_id||"").trim();
+      if(!userId||userId===callerId)return json({error:"Invalid applicant."},400);
+      const {data:existing,error:existingError}=await admin.from("user_roles").select("role").eq("user_id",userId).maybeSingle();
+      if(existingError)throw existingError;
+      if(existing)return json({error:"Cannot reject an already approved account."},409);
+      const {error:delError}=await admin.auth.admin.deleteUser(userId);
+      if(delError)throw delError;
+      return json({ok:true});
     }
 
     if(action==="create"){
