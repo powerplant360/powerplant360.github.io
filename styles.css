@@ -2482,3 +2482,9 @@ body.auth-locked.public-login-open #pp360LoginForm .auth-primary:focus-visible{o
 .pp360-quota-controls button{margin:6px 8px 6px 0;min-height:36px}
 .pp360-quota-request{display:flex;gap:8px;align-items:center;flex-wrap:wrap;border-top:1px solid var(--line);padding:10px 0}
 .pp360-quota-request span{flex:1;min-width:200px}
+
+
+/* Consistent count and stored-file size directly beneath every department name. */
+.department-filter-buttons .dept-filter-btn{display:inline-flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-height:56px;line-height:1.2;text-align:center}
+.department-filter-buttons .pp360-dept-name{display:block;white-space:normal}
+.department-filter-buttons .pp360-dept-usage{display:block;font-size:.76rem;font-weight:500;opacity:.88;white-space:nowrap}
