@@ -374,6 +374,7 @@ function show(x){
      </section>
      <p class='muted member-disclaimer'>Always verify engineering values against approved OEM/design documents and site procedures.</p>
    </div>`;
+   window.pp360ShowPendingHome?.();
    v.querySelectorAll('[data-home-equipment]').forEach(b=>b.addEventListener('click',()=>equipmentPage(equipment[Number(b.dataset.homeEquipment)])));
  }
  if(x==='Common Documents')commonDocumentsPage();
