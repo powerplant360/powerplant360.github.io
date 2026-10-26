@@ -2497,7 +2497,7 @@
             <div class="department-filter-wrap">
               <div class="department-filter-label">Department</div>
               <div class="department-filter-buttons">
-                ${categories.map(c => `<button class="dept-filter-btn" data-category="${esc(c)}" onclick="setAdminDocCategory('${esc(c)}',this)">${esc(c)}</button>`).join('')}
+                ${categories.map(c => `<button class="dept-filter-btn" data-category="${esc(c)}" onclick="setAdminDocCategory('${esc(c)}',this)"><span class="pp360-dept-name">${esc(c)}</span><span class="pp360-dept-usage" aria-label="Department storage">0 files · 0 bytes</span></button>`).join('')}
               </div>
               <select id="filterCategory" class="admin-hidden-filter" aria-hidden="true">
                 <option value="">All categories</option>
@@ -4108,6 +4108,11 @@
       v.bytes+=Number(d.file_size||0);v.count++;
       groups.set(dept,v);
     }
+    document.querySelectorAll('.department-filter-buttons .dept-filter-btn').forEach(btn=>{
+      const v=groups.get(btn.getAttribute('data-category'))||{bytes:0,count:0};
+      const meta=btn.querySelector('.pp360-dept-usage');
+      if(meta)meta.textContent=v.count+' '+(v.count===1?'file':'files')+' · '+pp360FileSize(v.bytes);
+    });
     const selected=document.getElementById('filterCategory')?.value||'';
     const thisDept=selected?groups.get(selected)||{bytes:0,count:0}:null;
     target.innerHTML='<div class="pp360-quota-head"><strong>Plant storage: '+pp360FileSize(used)+' / '+pp360FileSize(quota)+'</strong>'+
@@ -4115,10 +4120,7 @@
       '<progress max="100" value="'+Math.min(100,Math.round(used/quota*100))+'"></progress>'+
       (used/quota>=.8?'<p class="pp360-quota-warning">Storage is above 80%. A quota increase requires Super Admin approval.</p>':'')+
       (thisDept?'<p><strong>'+esc(selected)+':</strong> '+pp360FileSize(thisDept.bytes)+' across '+thisDept.count+' files</p>':'')+
-      '<details><summary>View all department storage sizes</summary><div class="pp360-dept-stats">'+
-      Array.from(groups).sort((a,b)=>b[1].bytes-a[1].bytes).map(([name,v])=>
-       '<div><span>'+esc(name)+' ('+v.count+' files)</span><strong>'+pp360FileSize(v.bytes)+'</strong></div>').join('')+
-      '</div></details>'+
+
       '<div class="pp360-quota-controls"><h4>Request an increased limit</h4>'+
       '<p class="muted small">Default 300 MB per plant. Only Super Admin can approve increases.</p>'+
       '<label>Requested total storage (MB) <input type="number" min="301" max="102400" step="1" id="pp360QuotaRequested" placeholder="e.g. 500"></label>'+
