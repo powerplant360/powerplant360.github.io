@@ -108,14 +108,13 @@
     body.innerHTML =
       '<div class="auth-eyebrow">AUTHORIZED MEMBER ACCESS</div>' +
       '<h1>Welcome back</h1>' +
-      '<p class="auth-help">Sign in to your engineering workspace. One secure login for Admin, Engineer and Viewer accounts.</p>' +
+      '<p class="auth-help">Sign in to your engineering workspace.</p>' +
       '<form id="pp360LoginForm" autocomplete="on">' +
       '<label for="loginEmail">Username or Email</label>' +
-      '<input id="loginEmail" name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" enterkeyhint="next" placeholder="Enter username or email address">' +
-      pp360RecentLoginOptions() +
+      '<input id="loginEmail" name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" enterkeyhint="next" placeholder="">' +
       '<label for="loginPassword">Password</label>' +
-      '<div class="auth-password-wrap"><input id="loginPassword" name="password" type="password" autocomplete="current-password" enterkeyhint="go" placeholder="Password"><button type="button" class="auth-password-toggle" aria-label="Show password" aria-pressed="false" onclick="toggleAuthPassword(\'loginPassword\',this)">Show</button></div>' +
-      '<button id="loginSubmit" type="submit" class="auth-primary">Sign in securely <span aria-hidden="true">→</span></button>' +
+      '<div class="auth-password-wrap"><input id="loginPassword" name="password" type="password" autocomplete="current-password" enterkeyhint="go" placeholder=""><button type="button" class="auth-password-toggle" aria-label="Show password" aria-pressed="false" onclick="toggleAuthPassword(\'loginPassword\',this)">Show</button></div>' +
+      '<button id="loginSubmit" type="submit" class="auth-primary">Login</button>' +
       '</form>' +
       '<button class="auth-link" onclick="showForgotPassword()">Forgot password?</button>' +
       '<div id="loginMsg" class="auth-message">' + esc(message || '') + '</div>';
