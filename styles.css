@@ -2488,3 +2488,16 @@ body.auth-locked.public-login-open #pp360LoginForm .auth-primary:focus-visible{o
 .department-filter-buttons .dept-filter-btn{display:inline-flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-height:56px;line-height:1.2;text-align:center}
 .department-filter-buttons .pp360-dept-name{display:block;white-space:normal}
 .department-filter-buttons .pp360-dept-usage{display:block;font-size:.76rem;font-weight:500;opacity:.88;white-space:nowrap}
+
+
+/* Larger, readable department buttons with independent name and usage lines. */
+.department-filter-buttons{display:grid!important;grid-template-columns:repeat(auto-fit,minmax(min(100%,176px),1fr));gap:10px!important}
+.department-filter-buttons .dept-filter-btn{width:100%;min-width:0;min-height:74px;padding:12px 10px!important;gap:7px;display:flex;flex-direction:column;align-items:center;justify-content:center;white-space:normal}
+.department-filter-buttons .pp360-dept-name{font-size:.95rem;font-weight:700;line-height:1.25;white-space:normal}
+.department-filter-buttons .pp360-dept-usage{font-size:.79rem;font-weight:500;line-height:1.25;white-space:normal;opacity:.9}
+.pp360-quota-controls{margin-top:8px;padding-top:7px}
+.pp360-quota-controls>summary{display:list-item;font-size:.9rem;cursor:pointer;padding:7px 4px;font-weight:700}
+.pp360-quota-controls:not([open]){padding-bottom:0}
+.pp360-quota-form{padding:8px 0 0;max-width:680px}
+.pp360-quota-form h4{margin:3px 0 6px}
+@media(max-width:600px){.department-filter-buttons{grid-template-columns:repeat(2,minmax(0,1fr))}.department-filter-buttons .dept-filter-btn{min-height:80px}}
