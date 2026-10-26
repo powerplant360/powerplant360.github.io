@@ -4121,13 +4121,13 @@
       (used/quota>=.8?'<p class="pp360-quota-warning">Storage is above 80%. A quota increase requires Super Admin approval.</p>':'')+
       (thisDept?'<p><strong>'+esc(selected)+':</strong> '+pp360FileSize(thisDept.bytes)+' across '+thisDept.count+' files</p>':'')+
 
-      '<div class="pp360-quota-controls"><h4>Request an increased limit</h4>'+
+      '<details class="pp360-quota-controls"><summary>Request a storage limit increase</summary><div class="pp360-quota-form"><h4>Storage increase request</h4>'+
       '<p class="muted small">Default 300 MB per plant. Only Super Admin can approve increases.</p>'+
       '<label>Requested total storage (MB) <input type="number" min="301" max="102400" step="1" id="pp360QuotaRequested" placeholder="e.g. 500"></label>'+
       '<label>Reason <input type="text" maxlength="1000" id="pp360QuotaReason" placeholder="Why is more storage required?"></label>'+
       '<button type="button" onclick="pp360RequestQuotaIncrease()">Request Increase</button>'+
       '<div class="muted small" id="pp360QuotaMessage" role="status"></div>'+
-      '<div id="pp360QuotaRequests"></div></div>';
+      '<div id="pp360QuotaRequests"></div></div></details>';
   }
 
   renderDocTable = function () {
