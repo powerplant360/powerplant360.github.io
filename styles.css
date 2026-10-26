@@ -2454,3 +2454,14 @@ body.auth-locked.public-login-open #pp360LoginForm .auth-primary:focus-visible{o
 .pp360-home-pending span{flex:1;min-width:180px;font-size:.88rem;color:var(--muted)}
 .pp360-home-pending button{padding:9px 14px;border:0;border-radius:7px;background:var(--accent);color:#fff;font-weight:700;cursor:pointer}
 .pp360-home-pending button:focus-visible{outline:3px solid #4aaed8;outline-offset:2px}
+
+
+/* Shared administrator help pages — legible on mobile and desktop. */
+.pp360-admin-guide{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:14px;margin-top:14px}
+.pp360-admin-guide section{padding:16px;border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink)}
+.pp360-admin-guide h4{font-size:1rem;line-height:1.35;margin:0 0 10px}
+.pp360-admin-guide p,.pp360-admin-guide li{font-size:.91rem;line-height:1.65}
+.pp360-admin-guide p{margin:0 0 10px}
+.pp360-admin-guide p:last-child{margin-bottom:0}
+.pp360-admin-guide ul{margin:0;padding-left:20px}
+.pp360-admin-guide li+li{margin-top:5px}
