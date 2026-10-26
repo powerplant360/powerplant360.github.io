@@ -2465,3 +2465,20 @@ body.auth-locked.public-login-open #pp360LoginForm .auth-primary:focus-visible{o
 .pp360-admin-guide p:last-child{margin-bottom:0}
 .pp360-admin-guide ul{margin:0;padding-left:20px}
 .pp360-admin-guide li+li{margin-top:5px}
+
+
+/* Plant storage usage, department totals and owner-approved quota requests. */
+.pp360-department-storage{border:1px solid var(--line);border-radius:12px;padding:13px 16px;margin:12px 0 18px;background:var(--soft);color:var(--ink)}
+.pp360-quota-head{display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
+.pp360-department-storage progress{display:block;width:100%;height:13px;margin:10px 0}
+.pp360-department-storage summary{cursor:pointer;font-weight:600;padding:7px 0}
+.pp360-dept-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:8px}
+.pp360-dept-stats>div{display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid var(--line);padding:7px 0}
+.pp360-dept-stats span{overflow-wrap:anywhere}
+.pp360-quota-warning{font-weight:700}
+.pp360-quota-controls{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
+.pp360-quota-controls label{display:block;margin:8px 0}
+.pp360-quota-controls input{display:block;width:100%;max-width:460px;min-height:39px;margin-top:4px}
+.pp360-quota-controls button{margin:6px 8px 6px 0;min-height:36px}
+.pp360-quota-request{display:flex;gap:8px;align-items:center;flex-wrap:wrap;border-top:1px solid var(--line);padding:10px 0}
+.pp360-quota-request span{flex:1;min-width:200px}

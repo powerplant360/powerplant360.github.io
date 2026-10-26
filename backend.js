@@ -2493,6 +2493,7 @@
               <p class="muted">View and manage uploaded plant documents department-wise.</p>
             </div>
 
+            <div id="pp360DepartmentStorage" class="pp360-department-storage" aria-live="polite"></div>
             <div class="department-filter-wrap">
               <div class="department-filter-label">Department</div>
               <div class="department-filter-buttons">
@@ -3233,6 +3234,11 @@
     const status = document.getElementById(id + '_status');
 
     try {
+      const maxSingle=25*1024*1024;
+      if(file.size>maxSingle)throw new Error('File is larger than 25 MB. Contact Super Admin for advice.');
+      await pp360ReloadStorageQuota();
+      const remaining=Number(pp360StorageQuota.quota_bytes)-Number(pp360StorageQuota.used_bytes);
+      if(file.size>remaining)throw new Error('Plant storage limit reached ('+pp360FileSize(pp360StorageQuota.quota_bytes)+'). Super Admin approval is required to increase the quota.');
       const { data: sessionData } = await client().auth.getSession();
       const s = sessionData.session;
       if (!s) throw new Error('Session expired. Please log in again.');
@@ -3792,6 +3798,8 @@
 
     docs = data || [];
     renderDocTable();
+    void pp360ReloadStorageQuota();
+    void pp360LoadQuotaRequests();
   }
 
   window.toggleApiUsage = async function () {
@@ -4031,8 +4039,98 @@
     renderDocTable();
   };
 
+  const PP360_DEFAULT_PLANT_QUOTA=300*1024*1024;
+  let pp360StorageQuota={quota_bytes:PP360_DEFAULT_PLANT_QUOTA,used_bytes:0};
+  const pp360FileSize=(n)=>{
+    const x=Number(n)||0;
+    return x>=1048576?(x/1048576).toFixed(2)+' MB':x>=1024?(x/1024).toFixed(1)+' KB':x+' bytes';
+  };
+  async function pp360ReloadStorageQuota(){
+    if(backendRole!=='admin')return;
+    try{
+      const {data,error}=await client().rpc('pp360_my_storage_quota');
+      if(error)throw error;
+      if(Array.isArray(data)&&data[0])pp360StorageQuota=data[0];
+    }catch(e){console.warn('Plant quota refresh unavailable:',e?.message||e);}
+    pp360RenderStorageSummary();
+  }
+  window.pp360RequestQuotaIncrease=async function(){
+    const plant=pp360StorageQuota.plant_id;
+    if(!plant||backendRole!=='admin')return;
+    const size=Number(document.getElementById('pp360QuotaRequested')?.value||0);
+    const reason=document.getElementById('pp360QuotaReason')?.value.trim()||'';
+    const msg=document.getElementById('pp360QuotaMessage');
+    if(!Number.isFinite(size)||size<=Number(pp360StorageQuota.quota_bytes)/1048576||reason.length<10){
+      if(msg)msg.textContent='Enter a larger quota (MB) and a reason of at least 10 characters.';return;
+    }
+    try{
+      const {error}=await client().rpc('pp360_request_storage_increase',{p_plant_id:plant,p_requested_bytes:Math.round(size*1048576),p_reason:reason});
+      if(error)throw error;
+      if(msg)msg.textContent='Increase requested. The Super Admin must approve it.';
+      void pp360LoadQuotaRequests();
+    }catch(e){if(msg)msg.textContent=e?.message||'Request failed.';}
+  };
+  window.pp360ReviewQuotaRequest=async function(id,approved){
+    if(backendRole!=='admin')return;
+    if(!confirm(approved?'Approve this plant storage increase?':'Reject this storage increase request?'))return;
+    const msg=document.getElementById('pp360QuotaMessage');
+    try{
+      const {error}=await client().rpc('pp360_review_storage_increase',{p_request_id:id,p_approve:approved});
+      if(error)throw error;
+      if(msg)msg.textContent=approved?'Quota increase approved.':'Request rejected.';
+      await pp360ReloadStorageQuota();
+      await pp360LoadQuotaRequests();
+    }catch(e){if(msg)msg.textContent=e?.message||'Review failed.';}
+  };
+  async function pp360LoadQuotaRequests(){
+    const target=document.getElementById('pp360QuotaRequests');
+    if(!target||backendRole!=='admin')return;
+    try{
+      const {data,error}=await client().rpc('pp360_my_storage_requests');
+      if(error)throw error;
+      const rows=(data||[]).filter(r=>r.status==='pending');
+      target.innerHTML=rows.length?'<h4>Pending storage increase requests</h4>'+rows.map(r=>
+        '<div class="pp360-quota-request"><span>'+esc(r.plant_name)+' — '+pp360FileSize(r.requested_bytes)+' · '+esc(r.reason)+'</span>'+
+        (r.can_review?'<button type="button" onclick="pp360ReviewQuotaRequest(\''+esc(r.id)+'\',true)">Approve</button>'+
+          '<button type="button" onclick="pp360ReviewQuotaRequest(\''+esc(r.id)+'\',false)">Reject</button>':'<em>Awaiting Super Admin approval</em>')+'</div>'
+      ).join(''):'';
+    }catch(e){target.textContent='Quota requests unavailable: '+String(e?.message||e);}
+  }
+  function pp360RenderStorageSummary(){
+    const target=document.getElementById('pp360DepartmentStorage');
+    if(!target)return;
+    const used=docs.reduce((a,d)=>a+Number(d.file_size||0),0);
+    const quota=Number(pp360StorageQuota.quota_bytes)||PP360_DEFAULT_PLANT_QUOTA;
+    const groups=new Map();
+    for(const d of docs){
+      const dept=String(d.category||'Unassigned');
+      const v=groups.get(dept)||{bytes:0,count:0};
+      v.bytes+=Number(d.file_size||0);v.count++;
+      groups.set(dept,v);
+    }
+    const selected=document.getElementById('filterCategory')?.value||'';
+    const thisDept=selected?groups.get(selected)||{bytes:0,count:0}:null;
+    target.innerHTML='<div class="pp360-quota-head"><strong>Plant storage: '+pp360FileSize(used)+' / '+pp360FileSize(quota)+'</strong>'+
+      '<span>Remaining: '+pp360FileSize(Math.max(0,quota-used))+'</span></div>'+
+      '<progress max="100" value="'+Math.min(100,Math.round(used/quota*100))+'"></progress>'+
+      (used/quota>=.8?'<p class="pp360-quota-warning">Storage is above 80%. A quota increase requires Super Admin approval.</p>':'')+
+      (thisDept?'<p><strong>'+esc(selected)+':</strong> '+pp360FileSize(thisDept.bytes)+' across '+thisDept.count+' files</p>':'')+
+      '<details><summary>View all department storage sizes</summary><div class="pp360-dept-stats">'+
+      Array.from(groups).sort((a,b)=>b[1].bytes-a[1].bytes).map(([name,v])=>
+       '<div><span>'+esc(name)+' ('+v.count+' files)</span><strong>'+pp360FileSize(v.bytes)+'</strong></div>').join('')+
+      '</div></details>'+
+      '<div class="pp360-quota-controls"><h4>Request an increased limit</h4>'+
+      '<p class="muted small">Default 300 MB per plant. Only Super Admin can approve increases.</p>'+
+      '<label>Requested total storage (MB) <input type="number" min="301" max="102400" step="1" id="pp360QuotaRequested" placeholder="e.g. 500"></label>'+
+      '<label>Reason <input type="text" maxlength="1000" id="pp360QuotaReason" placeholder="Why is more storage required?"></label>'+
+      '<button type="button" onclick="pp360RequestQuotaIncrease()">Request Increase</button>'+
+      '<div class="muted small" id="pp360QuotaMessage" role="status"></div>'+
+      '<div id="pp360QuotaRequests"></div></div>';
+  }
+
   renderDocTable = function () {
     renderStorageUsage();
+    pp360RenderStorageSummary();
     const wrap = document.getElementById('docTableWrap');
     if (!wrap) return;
 
@@ -4063,7 +4161,7 @@
         return '<div class="admin-file-row">' +
           '<div class="admin-file-name" title="' + esc(d.file_name || '') + '">' +
             '<b>' + esc(d.file_name || 'Unnamed document') + '</b>' +
-            '<div class="muted small">' + esc(pp360DocumentIndexStatus(d)) + '</div>' +
+            '<div class="muted small">' + esc(pp360DocumentIndexStatus(d)) + ' · File size: ' + pp360FileSize(d.file_size) + '</div>' +
           '</div>' +
           '<div class="admin-file-actions">' +
             indexAction +
