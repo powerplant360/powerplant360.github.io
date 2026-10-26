@@ -2872,6 +2872,45 @@
     return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString();
   }
 
+
+  let pp360PendingHomeRequest=0;
+  window.pp360OpenPendingApprovals=function(){
+    if(backendRole!=='admin')return;
+    if(typeof show==='function')show('Admin');
+    const button=document.querySelector('[data-admin-nav="users"]');
+    window.showAdminPanel?.('users',button);
+  };
+  window.pp360ShowPendingHome=async function(){
+    if(backendRole!=='admin')return;
+    const view=document.getElementById('view');
+    if(!view?.querySelector('.member-dashboard-compact'))return;
+    const request=++pp360PendingHomeRequest;
+    const banner=document.createElement('section');
+    banner.id='pp360HomePendingApprovals';
+    banner.className='pp360-home-pending';
+    banner.setAttribute('aria-label','Pending member registrations');
+    banner.hidden=true;
+    view.querySelector('.member-dashboard-compact')?.prepend(banner);
+    try{
+      const result=await callManageUsers({action:'list'});
+      const pending=(result?.users||[]).filter(u=>u.role==='pending');
+      if(request!==pp360PendingHomeRequest||!banner.isConnected||!pending.length)return;
+      const title=document.createElement('strong');
+      title.textContent=pending.length+' pending sign-up request'+(pending.length===1?'':'s');
+      const description=document.createElement('span');
+      description.textContent='Admin approval required before new members can access plant data.';
+      const action=document.createElement('button');
+      action.type='button';
+      action.textContent='Review requests';
+      action.addEventListener('click',window.pp360OpenPendingApprovals);
+      banner.append(title,description,action);
+      banner.hidden=false;
+    }catch(_){
+      // Keep Home functional if Admin Management is temporarily unavailable.
+      if(banner.isConnected)banner.remove();
+    }
+  };
+
   async function loadUserManagement() {
     const wrap = document.getElementById('userListWrap');
     if (!wrap || backendRole !== 'admin') return;
