@@ -117,6 +117,7 @@
       '<button id="loginSubmit" type="submit" class="auth-primary">Login</button>' +
       '</form>' +
       '<button class="auth-link" onclick="showForgotPassword()">Forgot password?</button>' +
+      '<p class="pp360-signup-cta">New to PowerPlant360? <button type="button" class="auth-link" onclick="showSignupGate()">Sign Up</button></p>' +
       '<div id="loginMsg" class="auth-message">' + esc(message || '') + '</div>';
 
     const loginForm=document.getElementById('pp360LoginForm');
@@ -129,6 +130,68 @@
     }
   }
   window.showLoginGate = showLoginGate;
+
+  window.showSignupGate=function(){
+    setAuthLocked(true);
+    document.body.classList.add('public-login-open');
+    const body=document.getElementById('authGateBody');
+    if(!body)return;
+    body.innerHTML=
+      '<div class="auth-eyebrow">NEW MEMBER REGISTRATION</div>'+
+      '<h1>Request access</h1>'+
+      '<p class="auth-help">Create your account. Private plant information stays locked until an Admin approves your request.</p>'+
+      '<form id="pp360SignupForm" autocomplete="on">'+
+      '<label for="signupName">Full name</label><input id="signupName" name="name" type="text" maxlength="80" autocomplete="name" required>'+
+      '<label for="signupEmail">Email address</label><input id="signupEmail" name="email" type="email" autocomplete="email" required>'+
+      '<label for="signupUsername">Preferred username (optional)</label><input id="signupUsername" name="username" type="text" maxlength="30" autocapitalize="none" spellcheck="false" placeholder="3–30 characters">'+
+      '<label for="signupPassword">Password</label><input id="signupPassword" name="new-password" type="password" minlength="8" autocomplete="new-password" required>'+
+      '<label for="signupConfirm">Confirm password</label><input id="signupConfirm" name="confirm-password" type="password" minlength="8" autocomplete="new-password" enterkeyhint="go" required>'+
+      '<button class="auth-primary" type="submit" id="signupSubmit">Submit for Admin Approval</button>'+
+      '</form>'+
+      '<button class="auth-link" type="button" onclick="showLoginGate()">Already registered? Login</button>'+
+      '<div id="signupMsg" class="auth-message" role="status"></div>';
+    document.getElementById('pp360SignupForm')?.addEventListener('submit',event=>{
+      event.preventDefault();
+      window.submitSignupRequest?.();
+    });
+  };
+  window.submitSignupRequest=async function(){
+    const btn=document.getElementById('signupSubmit');
+    if(btn?.disabled)return;
+    const msg=document.getElementById('signupMsg');
+    const fullName=document.getElementById('signupName')?.value.trim()||'';
+    const email=document.getElementById('signupEmail')?.value.trim().toLowerCase()||'';
+    const username=document.getElementById('signupUsername')?.value.trim().toLowerCase()||'';
+    const password=document.getElementById('signupPassword')?.value||'';
+    const confirm=document.getElementById('signupConfirm')?.value||'';
+    if(fullName.length<2||fullName.length>80||!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){
+      if(msg)msg.textContent='Enter your full name and a valid email address.';return;
+    }
+    if(username && !/^[a-z][a-z0-9._-]{2,29}$/.test(username)){
+      if(msg)msg.textContent='Username must start with a letter and use 3–30 letters, digits, dots, underscores or hyphens.';return;
+    }
+    if(password.length<8||password!==confirm){
+      if(msg)msg.textContent='Passwords must match and contain at least 8 characters.';return;
+    }
+    try{
+      if(btn)btn.disabled=true;
+      if(msg)msg.textContent='Submitting registration…';
+      const {data,error}=await client().auth.signUp({
+        email,password,
+        options:{emailRedirectTo:window.location.origin+window.location.pathname,
+          data:{full_name:fullName,pp360_signup_username:username}}
+      });
+      if(error)throw error;
+      // An unapproved session must never open the members-only application.
+      if(data?.session)await client().auth.signOut();
+      document.getElementById('pp360SignupForm')?.reset();
+      if(msg)msg.textContent='Registration submitted. Check your email for a confirmation link if requested. Admin approval is required before you can log in.';
+    }catch(err){
+      if(msg)msg.textContent='Registration could not be completed: '+String(err?.message||err);
+    }finally{if(btn?.isConnected)btn.disabled=false;}
+  };
+
+
 
   // Presentation-only password visibility; never changes credentials or auth logic.
   window.toggleAuthPassword = function (inputId, button) {
@@ -2814,6 +2877,7 @@
     try {
       const payload = await callManageUsers({action:'list'});
       const users = Array.isArray(payload?.users) ? payload.users : [];
+      const pending=users.filter(u=>u.role==='pending');
 
       if (!users.length) {
         wrap.innerHTML = '<div class="notice">No users found.</div>';
@@ -2821,6 +2885,15 @@
       }
 
       wrap.innerHTML =
+        (pending.length?'<div class="pp360-pending-requests"><h4>Pending Sign-up Requests ('+pending.length+')</h4>'+
+          pending.map(u=>'<div class="pp360-pending-row"><div><strong>'+esc(String(u.email||''))+'</strong>'+
+            (u.requested_username?'<small>Requested username: '+esc(String(u.requested_username))+'</small>':'')+
+            '<small>Created: '+esc(managedUserDate(u.created_at))+'</small>'+
+            (u.email_confirmed_at?'':'<small>Email verification pending</small>')+'</div>'+
+            '<div class="pp360-pending-actions"><button type="button" onclick="approveSignup(\''+esc(u.id)+'\',\'viewer\')"' +(u.email_confirmed_at?'':' disabled')+'>Approve Viewer</button>'+
+            '<button type="button" onclick="approveSignup(\''+esc(u.id)+'\',\'engineer\')"' +(u.email_confirmed_at?'':' disabled')+'>Approve Engineer</button>'+
+            '<button type="button" class="dangerbtn" onclick="rejectSignup(\''+esc(u.id)+'\')">Reject</button></div></div>').join('')+
+          '</div>':'<p class="muted small">No pending sign-up requests.</p>')+
         '<div class="user-table-scroll"><table class="user-table">' +
           '<thead><tr><th scope="col">Email</th><th scope="col">Username</th><th scope="col">Role</th><th scope="col">Created</th><th scope="col">Last Sign-in</th><th scope="col">Actions</th></tr></thead><tbody>' +
           users.map(u => {
@@ -2828,14 +2901,14 @@
             const isAdmin = role === 'admin';
             const isCurrent = Boolean(u?.is_current);
 
-            const roleCell = isAdmin
+            const roleCell = role==='pending' ? '<span class="badge">Pending approval</span>' : isAdmin
               ? '<span class="badge ok">Admin</span>'
               : '<select class="managed-role-select" onchange="changeManagedUserRole(\'' + esc(u.id) + '\',this.value)">' +
                   '<option value="engineer"' + (role === 'engineer' ? ' selected' : '') + '>Engineer</option>' +
                   '<option value="viewer"' + (role === 'viewer' ? ' selected' : '') + '>Viewer</option>' +
                 '</select>';
 
-            const actions = isAdmin
+            const actions = role==='pending' ? '<span class="muted small">Use the approval buttons above</span>' : isAdmin
               ? '<span class="muted small">' + (isCurrent ? 'Current Admin · protected' : 'Admin · protected') + '</span>'
               : '<div class="managed-user-actions">' +
                   '<button onclick="copyManagedUserEmail(\'' + esc(String(u.email || '')) + '\')">Copy Email</button>' +
@@ -2857,6 +2930,28 @@
     }
   }
   window.loadUserManagement = loadUserManagement;
+  window.approveSignup=async function(userId,role){
+    if(backendRole!=='admin'||!['viewer','engineer'].includes(role))return;
+    if(!confirm('Approve this applicant as '+role+'?'))return;
+    const msg=document.getElementById('userManageMsg');
+    try{
+      if(msg)msg.textContent='Approving applicant…';
+      await callManageUsers({action:'approve_signup',user_id:userId,role});
+      if(msg)msg.textContent='Applicant approved as '+role+'.';
+      await loadUserManagement();
+    }catch(err){if(msg)msg.textContent='Approval failed: '+String(err?.message||err);}
+  };
+  window.rejectSignup=async function(userId){
+    if(backendRole!=='admin')return;
+    if(!confirm('Reject this pending registration? This deletes the unapproved login account.'))return;
+    const msg=document.getElementById('userManageMsg');
+    try{
+      await callManageUsers({action:'reject_signup',user_id:userId});
+      if(msg)msg.textContent='Pending registration rejected.';
+      await loadUserManagement();
+    }catch(err){if(msg)msg.textContent='Rejection failed: '+String(err?.message||err);}
+  };
+
 
   window.saveManagedUsername=async function(userId){
     if(backendRole!=='admin')return;
