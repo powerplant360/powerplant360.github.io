@@ -2312,6 +2312,9 @@
           <button class="admin-side-btn" data-admin-nav="plant" onclick="showAdminPanel('plant',this)">
             <span class="admin-nav-icon">▣</span><span>Plant Details</span>
           </button>
+          <button class="admin-side-btn" data-admin-nav="guide" onclick="showAdminPanel('guide',this)">
+            <span class="admin-nav-icon">☷</span><span>Admin Guide</span>
+          </button>
         </aside>
 
         <section class="admin-main-panel">
@@ -2437,6 +2440,52 @@
               <div id="pp360PlantDetailsStatus" class="muted small" role="status"></div>
               <p class="muted small">Saved securely in shared plant settings. All signed-in Admin, Engineer and Viewer accounts see the same header.</p>
             </form>
+          </div>
+          <div class="admin-panel" data-admin-panel="guide" hidden>
+            <div class="admin-panel-heading">
+              <h3>Admin Guide — How to use PowerPlant360</h3>
+              <p class="muted">Simple instructions for plant administrators. Open this guide anytime from the Admin menu.</p>
+            </div>
+            <div class="pp360-admin-guide">
+              <section><h4>1. Start with your plant details</h4>
+                <p>Open <strong>Plant Details</strong>. Enter the approved plant name and installed capacity in MW. Check the values before saving.</p>
+              </section>
+              <section><h4>2. Add documents carefully</h4>
+                <p>Open <strong>Upload Documents</strong>. Select the correct department, then upload an approved file. Use <strong>Common Documents</strong> only for references shared between departments.</p>
+                <p>Check that each uploaded document is indexed and search-ready. Uploading alone does not guarantee the search can read it.</p>
+              </section>
+              <section><h4>3. Review stored documents</h4>
+                <p>Open <strong>Stored Documents</strong> to view, preview and manage files. Check the filename, department and document version. Delete or replace files only when necessary.</p>
+              </section>
+              <section><h4>4. Manage your team</h4>
+                <p>Open <strong>User Management</strong>. Review registration requests. Approve only people you know and choose the minimum access they need: <strong>Viewer</strong> to read, or <strong>Engineer</strong> for their authorized tasks.</p>
+                <p>Future independent Plant Admins will manage only users assigned to their plant, after plant-isolated permissions are deployed.</p>
+              </section>
+              <section><h4>5. Check answers and calculations</h4>
+                <p>For every plant-specific answer, open the supporting document and confirm the equipment name, operating condition, number and unit. Verify calculator input units before using a result.</p>
+                <p><strong>For safety:</strong> Use approved OEM manuals, site SOPs and authorized engineering procedures for operating decisions. Do not use an AI answer alone to change a protection setting or operate equipment.</p>
+              </section>
+              <section><h4>Do these things</h4>
+                <ul><li>Use strong passwords and protect your login.</li>
+                <li>Upload approved, current documents only.</li>
+                <li>Check department names, equipment tags and units.</li>
+                <li>Review user access regularly.</li>
+                <li>Report wrong search answers or document previews before relying on them.</li></ul>
+              </section>
+              <section><h4>Do NOT do these things</h4>
+                <ul><li>Do not share passwords or let other people use your account.</li>
+                <li>Do not upload another plant's confidential data without permission.</li>
+                <li>Do not approve unknown applicants.</li>
+                <li>Do not delete important documents without an approved backup.</li>
+                <li>Do not treat suggested values as confirmed interlocks or safe operating limits.</li></ul>
+              </section>
+              <section><h4>Platform owner controls</h4>
+                <p><strong>System Status</strong>, <strong>Backup &amp; Recovery</strong>, new Plant Admin invitations and cross-plant management are Super Admin responsibilities in the planned multi-plant system. They are not delegated to Plant Admins until server-side isolation is implemented and tested.</p>
+              </section>
+              <section><h4>Need help?</h4>
+                <p>Ask the PowerPlant360 Super Admin before making major user-access changes, deleting critical files, or modifying plant operating references.</p>
+              </section>
+            </div>
           </div>
           <div class="admin-panel active" data-admin-panel="documents">
             <div class="admin-panel-heading">
