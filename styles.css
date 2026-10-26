@@ -2501,3 +2501,16 @@ body.auth-locked.public-login-open #pp360LoginForm .auth-primary:focus-visible{o
 .pp360-quota-form{padding:8px 0 0;max-width:680px}
 .pp360-quota-form h4{margin:3px 0 6px}
 @media(max-width:600px){.department-filter-buttons{grid-template-columns:repeat(2,minmax(0,1fr))}.department-filter-buttons .dept-filter-btn{min-height:80px}}
+
+
+/* Compact quota overview: retain usage, capacity, warning and expandable request. */
+.pp360-department-storage{padding:9px 13px;margin:8px 0 13px;border-radius:9px}
+.pp360-quota-head{align-items:center;gap:6px 18px;font-size:.86rem;line-height:1.35}
+.pp360-department-storage progress{height:7px;margin:6px 0}
+.pp360-department-storage .pp360-quota-warning{font-size:.78rem;font-weight:600;line-height:1.3;margin:4px 0 0}
+.pp360-quota-controls{border-top:0;margin:3px 0 0;padding:0}
+.pp360-quota-controls>summary{font-size:.78rem;font-weight:600;padding:3px 0;line-height:1.25}
+.pp360-quota-controls[open]{margin-top:8px;border-top:1px solid var(--line);padding-top:7px}
+.pp360-quota-form{padding-top:6px}
+body:has(.admin-dashboard) #appFooter{display:none}
+@media(max-width:600px){.pp360-quota-head{font-size:.8rem}.pp360-department-storage{padding:9px 10px}}
