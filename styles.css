@@ -2445,3 +2445,12 @@ body.auth-locked.public-login-open #pp360LoginForm .auth-primary:focus-visible{o
 .pp360-pending-row small{color:var(--muted)}
 .pp360-pending-actions{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
 .pp360-pending-actions button{min-height:36px}
+
+
+/* Reusable admin-only pending-approval notification on the Home page. */
+.pp360-home-pending{display:flex;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:16px;padding:12px 16px;border-radius:10px;border:1px solid var(--line);background:var(--soft);color:var(--ink)}
+.pp360-home-pending[hidden]{display:none!important}
+.pp360-home-pending strong{font-size:1rem}
+.pp360-home-pending span{flex:1;min-width:180px;font-size:.88rem;color:var(--muted)}
+.pp360-home-pending button{padding:9px 14px;border:0;border-radius:7px;background:var(--accent);color:#fff;font-weight:700;cursor:pointer}
+.pp360-home-pending button:focus-visible{outline:3px solid #4aaed8;outline-offset:2px}
