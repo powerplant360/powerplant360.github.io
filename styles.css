@@ -2429,3 +2429,19 @@ body.auth-locked.public-login-open #pp360LoginForm .auth-primary{
 }
 body.auth-locked.public-login-open #pp360LoginForm .auth-primary:hover{background:#293eaf}
 body.auth-locked.public-login-open #pp360LoginForm .auth-primary:focus-visible{outline:3px solid #8ab7ff;outline-offset:2px}
+
+
+/* Secure new-member request and admin approval surfaces. */
+.pp360-signup-cta{display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap;margin:12px 0 2px;color:var(--muted)}
+.pp360-signup-cta .auth-link{margin:0;padding:3px 5px}
+#pp360SignupForm{display:flex;flex-direction:column;gap:8px}
+#pp360SignupForm label{margin:3px 0 0;font-weight:700}
+#pp360SignupForm input{min-height:44px;width:100%;font-size:16px}
+#pp360SignupForm .auth-primary{margin-top:12px}
+.pp360-pending-requests{border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:18px;background:var(--soft)}
+.pp360-pending-requests h4{margin:0 0 12px}
+.pp360-pending-row{display:flex;justify-content:space-between;gap:15px;flex-wrap:wrap;padding:12px 0;border-top:1px solid var(--line)}
+.pp360-pending-row>div:first-child{display:flex;flex-direction:column;gap:3px}
+.pp360-pending-row small{color:var(--muted)}
+.pp360-pending-actions{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.pp360-pending-actions button{min-height:36px}
