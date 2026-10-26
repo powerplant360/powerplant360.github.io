@@ -176,14 +176,18 @@
     try{
       if(btn)btn.disabled=true;
       if(msg)msg.textContent='Submitting registration…';
-      const {data,error}=await client().auth.signUp({
+      // Isolated auth client: signing up cannot activate an unapproved session
+      // in the existing main portal session.
+      const signupClient=supabase.createClient(cfg.supabaseUrl,cfg.supabaseKey,{
+        auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}
+      });
+      const {data,error}=await signupClient.auth.signUp({
         email,password,
         options:{emailRedirectTo:window.location.origin+window.location.pathname,
           data:{full_name:fullName,pp360_signup_username:username}}
       });
       if(error)throw error;
-      // An unapproved session must never open the members-only application.
-      if(data?.session)await client().auth.signOut();
+      if(data?.session)await signupClient.auth.signOut();
       document.getElementById('pp360SignupForm')?.reset();
       if(msg)msg.textContent='Registration submitted. Check your email for a confirmation link if requested. Admin approval is required before you can log in.';
     }catch(err){
