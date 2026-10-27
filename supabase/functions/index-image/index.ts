@@ -54,6 +54,7 @@ Deno.serve(async (req) => {
 
   let supabaseAdmin:any = null;
   let documentId = "";
+  let documentAuthorized = false;
 
   try {
     const auth = req.headers.get("Authorization") || "";
@@ -114,6 +115,18 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Verify document access with the caller JWT before the service-role client touches it.
+    const {data:accessibleDoc,error:accessError} = await supabase.from("documents")
+      .select("id,plant_id").eq("id",documentId).maybeSingle();
+    if(accessError || !accessibleDoc?.plant_id) {
+      return new Response(JSON.stringify({error:"Document is unavailable for this plant."}),{status:403,headers:{...corsHeaders,"Content-Type":"application/json"}});
+    }
+    const {data:canIndex,error:permissionError}=await supabase.rpc("pp360_can_access_plant",
+      {p_plant:accessibleDoc.plant_id,p_write:true});
+    if(permissionError || canIndex!==true) {
+      return new Response(JSON.stringify({error:"Plant Admin permission required for this document."}),{status:403,headers:{...corsHeaders,"Content-Type":"application/json"}});
+    }
+    documentAuthorized = true;
     const {data:doc,error:docError} = await supabaseAdmin
       .from("documents")
       .select("id,file_name,storage_path,category,mime_type,metadata")
@@ -235,7 +248,7 @@ Output plain text only, optimized for search:
     const message = String(err?.message || err);
     console.error("index-image error", message.slice(0,1000));
 
-    if (supabaseAdmin && documentId) {
+    if (supabaseAdmin && documentId && documentAuthorized) {
       try {
         await supabaseAdmin
           .from("documents")
