@@ -3284,6 +3284,7 @@
     const bar = document.getElementById(id + '_bar');
     const pct = document.getElementById(id + '_pct');
     const status = document.getElementById(id + '_status');
+    let reservationId=null, storagePath='', remoteUploaded=false, metadataSaved=false;
 
     try {
       const maxSingle=25*1024*1024;
@@ -3298,9 +3299,16 @@
       const s = sessionData.session;
       if (!s) throw new Error('Session expired. Please log in again.');
 
-      const storagePath =
+      storagePath =
         'plants/' + targetPlantId + '/' + new Date().toISOString().slice(0, 10) + '/' +
         Date.now() + '-' + crypto.randomUUID() + '-' + safeRemoteFileName(file.name);
+
+      // Reserve capacity server-side before sending any file bytes.
+      const {data:reservation,error:reservationError}=await client().rpc('pp360_reserve_upload',{
+        p_plant_id:targetPlantId,p_path:storagePath,p_bytes:file.size
+      });
+      if(reservationError||!reservation)throw reservationError||new Error('Upload reservation was not approved.');
+      reservationId=reservation;
 
       const encodedPath = storagePath.split('/').map(encodeURIComponent).join('/');
       const uploadUrl =
@@ -3331,6 +3339,7 @@
         xhr.send(file);
       });
 
+      remoteUploaded=true;
       const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
       const isImage = isIndexableImageFile(file);
       const isOffice = isIndexableOfficeFile(file);
@@ -3352,10 +3361,8 @@
         }
       }).select('id').single();
 
-      if (dbError) {
-        await client().storage.from('plant-documents').remove([storagePath]);
-        throw dbError;
-      }
+      if (dbError) throw dbError;
+      metadataSaved=true;
 
       bar.style.width = '100%';
       pct.textContent = '100%';
@@ -3413,6 +3420,19 @@
       }
       return true;
     } catch (err) {
+      // A metadata failure must not strand uploaded bytes or a quota reservation.
+      if(reservationId&&!metadataSaved){
+        let cleaned=!remoteUploaded;
+        if(remoteUploaded&&storagePath){
+          try{
+            const {error:removeError}=await client().storage.from('plant-documents').remove([storagePath]);
+            cleaned=!removeError;
+          }catch(_){cleaned=false;}
+        }
+        if(cleaned){
+          try{await client().rpc('pp360_cancel_upload_reservation',{p_reservation_id:reservationId});}catch(_){}
+        }
+      }
       if (!options.suppressReload) window.pp360UploadContext = null;
       bar.classList.add('errorbar');
       pct.textContent = 'Error';
