@@ -34,6 +34,7 @@ Deno.serve(async (req) => {
 
   let admin:any = null;
   let documentId = "";
+  let documentAuthorized = false;
   try {
     const auth = req.headers.get("Authorization") || "";
     if (!auth.startsWith("Bearer ")) {
@@ -65,6 +66,18 @@ Deno.serve(async (req) => {
     documentId = String(body?.document_id || "").trim();
     if (!documentId) throw new Error("document_id is required.");
 
+    // Verify document access with the caller JWT before the service-role client touches it.
+    const {data:accessibleDoc,error:accessError} = await userClient.from("documents")
+      .select("id,plant_id").eq("id",documentId).maybeSingle();
+    if(accessError || !accessibleDoc?.plant_id) {
+      return new Response(JSON.stringify({error:"Document is unavailable for this plant."}),{status:403,headers:{...corsHeaders,"Content-Type":"application/json"}});
+    }
+    const {data:canIndex,error:permissionError}=await userClient.rpc("pp360_can_access_plant",
+      {p_plant:accessibleDoc.plant_id,p_write:true});
+    if(permissionError || canIndex!==true) {
+      return new Response(JSON.stringify({error:"Plant Admin permission required for this document."}),{status:403,headers:{...corsHeaders,"Content-Type":"application/json"}});
+    }
+    documentAuthorized = true;
     const {data:doc,error:docError} = await admin.from("documents")
       .select("id,file_name,storage_path,category,mime_type,metadata").eq("id",documentId).single();
     if (docError || !doc) throw new Error("Document was not found.");
@@ -136,7 +149,7 @@ Deno.serve(async (req) => {
   } catch (err) {
     const message = String(err?.message || err);
     console.error("index-office error",message.slice(0,1000));
-    if (admin && documentId) {
+    if (admin && documentId && documentAuthorized) {
       try { await admin.from("documents").update({processing_status:"error",updated_at:new Date().toISOString()}).eq("id",documentId); } catch (_) {}
     }
     return new Response(JSON.stringify({error:message}),{status:500,headers:{...corsHeaders,"Content-Type":"application/json"}});
