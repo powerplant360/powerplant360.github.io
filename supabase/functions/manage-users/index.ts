@@ -139,6 +139,48 @@ Deno.serve(async(req)=>{
       return json({ok:true});
     }
 
+    if(["prepare_plant_invite","list_plant_invites","revoke_plant_invite"].includes(action)){
+      const {data:memberships,error:membershipError}=await admin.from("pp360_plant_memberships")
+        .select("role").eq("user_id",callerId).eq("role","super_admin").limit(1);
+      if(membershipError)throw membershipError;
+      if(!memberships?.length)return json({error:"Super Admin permission required."},403);
+
+      if(action==="list_plant_invites"){
+        const {data,error}=await admin.from("pp360_plant_invitations")
+          .select("id,invited_email,status,created_at,expires_at").order("created_at",{ascending:false}).limit(100);
+        if(error)throw error;
+        // Only drafts are shown; never return invitation token hashes.
+        return json({invitations:data||[],activation_enabled:false});
+      }
+      if(action==="prepare_plant_invite"){
+        const email=String(body?.email||"").trim().toLowerCase();
+        if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)||email.length>254)return json({error:"Valid invitation email required."},400);
+        const {data:existing,error:existError}=await admin.from("pp360_plant_invitations")
+          .select("id").eq("invited_email",email).eq("status","issued")
+          .gt("expires_at",new Date().toISOString()).limit(1);
+        if(existError)throw existError;
+        if(existing?.length)return json({error:"An invitation preparation already exists for this email."},409);
+        const token=new Uint8Array(32);
+        crypto.getRandomValues(token);
+        const digest=await crypto.subtle.digest("SHA-256",token);
+        const hash=Array.from(new Uint8Array(digest)).map(x=>x.toString(16).padStart(2,"0")).join("");
+        const expires=new Date(Date.now()+48*60*60*1000).toISOString();
+        const {error:insertError}=await admin.from("pp360_plant_invitations").insert({
+          invited_email:email,token_hash:hash,invited_by:callerId,status:"issued",expires_at:expires
+        });
+        if(insertError)throw insertError;
+        // Intentional release gate: DO NOT return a usable invitation URL or bearer token.
+        return json({ok:true,activation_enabled:false,message:"Recipient recorded. Sending invitations is disabled until plant isolation is verified."});
+      }
+      if(action==="revoke_plant_invite"){
+        const id=String(body?.invitation_id||"");
+        if(!/^[0-9a-f-]{36}$/i.test(id))return json({error:"Invalid invitation identifier."},400);
+        const {error}=await admin.from("pp360_plant_invitations").update({status:"revoked"}).eq("id",id).eq("status","issued");
+        if(error)throw error;
+        return json({ok:true});
+      }
+    }
+
     if(action==="create"){
       const email=String(body?.email||"").trim().toLowerCase();
       const password=String(body?.password||"");
