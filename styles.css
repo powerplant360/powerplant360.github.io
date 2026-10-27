@@ -2514,3 +2514,12 @@ body.auth-locked.public-login-open #pp360LoginForm .auth-primary:focus-visible{o
 .pp360-quota-form{padding-top:6px}
 body:has(.admin-dashboard) #appFooter{display:none}
 @media(max-width:600px){.pp360-quota-head{font-size:.8rem}.pp360-department-storage{padding:9px 10px}}
+
+/* Super Admin invitation preparation; no registration links activated. */
+.pp360-invite-preparation{border:1px solid var(--line);border-radius:10px;padding:15px;margin:16px 0;background:var(--soft)}
+.pp360-invite-preparation h4{margin:0 0 7px}
+.pp360-invite-entry{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
+.pp360-invite-entry input{flex:1;min-width:min(100%,245px);min-height:40px}
+.pp360-invite-entry button,.pp360-invite-row button{min-height:38px}
+.pp360-invite-row{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:9px;padding:9px 0;border-top:1px solid var(--line)}
+.pp360-invite-row span{overflow-wrap:anywhere}

@@ -2392,6 +2392,16 @@
               </div>
               <div id="userManageMsg" class="muted small"></div>
               <div class="user-test-note">For role testing, use an <b>Incognito / Private</b> window.</div>
+              <section id="pp360PlantAdminInvites" class="pp360-invite-preparation" hidden>
+                <h4>Plant Admin Invitations</h4>
+                <p class="muted small">Super Admin only. Record intended recipients here. Invitation links and new plant activation are not yet enabled while plant-data isolation is being completed.</p>
+                <div class="pp360-invite-entry">
+                  <input type="email" id="pp360InviteEmail" autocomplete="off" placeholder="New Plant Admin email address" aria-label="New Plant Admin email address">
+                  <button type="button" onclick="pp360PreparePlantInvite()">Prepare Invitation</button>
+                </div>
+                <div id="pp360InviteStatus" role="status" class="muted small"></div>
+                <div id="pp360InvitesList" class="pp360-invites-list"></div>
+              </section>
               <div id="userListWrap" class="user-list-wrap"><div class="muted small">Loading users…</div></div>
             </div>
           </div>
@@ -3023,6 +3033,48 @@
     }
   }
   window.loadUserManagement = loadUserManagement;
+  async function pp360LoadPlantInvites(){
+    const panel=document.getElementById('pp360PlantAdminInvites');
+    if(!panel||backendRole!=='admin')return;
+    try{
+      const {data:membership,error:memberError}=await client().rpc('pp360_am_super_admin');
+      if(memberError||membership!==true){panel.hidden=true;return;}
+      panel.hidden=false;
+      const payload=await callManageUsers({action:'list_plant_invites'});
+      const items=Array.isArray(payload?.invitations)?payload.invitations:[];
+      const list=document.getElementById('pp360InvitesList');
+      if(list)list.innerHTML=items.length?items.map(x=>
+        '<div class="pp360-invite-row"><span><strong>'+esc(x.invited_email)+'</strong> · '+esc(x.status)+
+        ' · Expires '+esc(managedUserDate(x.expires_at))+'</span>'+
+        (x.status==='issued'?'<button type="button" onclick="pp360RevokePlantInvite(\''+esc(x.id)+'\')">Revoke</button>':'')+
+        '</div>').join(''):'<p class="muted small">No prepared invitations.</p>';
+    }catch(e){
+      const msg=document.getElementById('pp360InviteStatus');
+      if(msg)msg.textContent='Invitation preparation unavailable: '+String(e?.message||e);
+    }
+  }
+  window.pp360PreparePlantInvite=async function(){
+    const email=document.getElementById('pp360InviteEmail')?.value.trim().toLowerCase()||'';
+    const msg=document.getElementById('pp360InviteStatus');
+    if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){
+      if(msg)msg.textContent='Enter a valid email address.';return;
+    }
+    try{
+      if(msg)msg.textContent='Recording invitation recipient…';
+      await callManageUsers({action:'prepare_plant_invite',email});
+      if(msg)msg.textContent='Recipient saved. No invitation link has been activated or sent.';
+      const field=document.getElementById('pp360InviteEmail');if(field)field.value='';
+      await pp360LoadPlantInvites();
+    }catch(e){if(msg)msg.textContent=String(e?.message||e);}
+  };
+  window.pp360RevokePlantInvite=async function(id){
+    if(!confirm('Revoke this prepared invitation?'))return;
+    try{
+      await callManageUsers({action:'revoke_plant_invite',invitation_id:id});
+      await pp360LoadPlantInvites();
+    }catch(e){const msg=document.getElementById('pp360InviteStatus');if(msg)msg.textContent=String(e?.message||e);}
+  };
+
   window.approveSignup=async function(userId,role){
     if(backendRole!=='admin'||!['viewer','engineer'].includes(role))return;
     if(!confirm('Approve this applicant as '+role+'?'))return;
@@ -4025,7 +4077,7 @@
       renderStorageUsage();
       loadApiUsage();
     }
-    if (name === 'users') loadUserManagement();
+    if (name === 'users') { loadUserManagement(); void pp360LoadPlantInvites(); }
   };
 
   window.setAdminDocCategory = function(category, button) {
