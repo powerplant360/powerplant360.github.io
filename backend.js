@@ -3288,7 +3288,10 @@
     try {
       const maxSingle=25*1024*1024;
       if(file.size>maxSingle)throw new Error('File is larger than 25 MB. Contact Super Admin for advice.');
-      await pp360ReloadStorageQuota();
+      // Uploads require exactly one explicitly authorized plant until the multi-plant selector is available.
+      const quotaRows=await pp360ReloadStorageQuota(true);
+      if(quotaRows.length!==1||!pp360StorageQuota.plant_id)throw new Error('Choose a plant before uploading. Multi-plant selection is not yet enabled.');
+      const targetPlantId=String(pp360StorageQuota.plant_id);
       const remaining=Number(pp360StorageQuota.quota_bytes)-Number(pp360StorageQuota.used_bytes);
       if(file.size>remaining)throw new Error('Plant storage limit reached ('+pp360FileSize(pp360StorageQuota.quota_bytes)+'). Super Admin approval is required to increase the quota.');
       const { data: sessionData } = await client().auth.getSession();
@@ -3296,7 +3299,7 @@
       if (!s) throw new Error('Session expired. Please log in again.');
 
       const storagePath =
-        new Date().toISOString().slice(0, 10) + '/' +
+        'plants/' + targetPlantId + '/' + new Date().toISOString().slice(0, 10) + '/' +
         Date.now() + '-' + crypto.randomUUID() + '-' + safeRemoteFileName(file.name);
 
       const encodedPath = storagePath.split('/').map(encodeURIComponent).join('/');
@@ -3333,6 +3336,7 @@
       const isOffice = isIndexableOfficeFile(file);
 
       const { data: insertedRows, error: dbError } = await client().from('documents').insert({
+        plant_id: targetPlantId,
         file_name: file.name,
         storage_path: storagePath,
         category: uploadContext.category || guessCategory(file.name),
@@ -4097,14 +4101,22 @@
     const x=Number(n)||0;
     return x>=1048576?(x/1048576).toFixed(2)+' MB':x>=1024?(x/1024).toFixed(1)+' KB':x+' bytes';
   };
-  async function pp360ReloadStorageQuota(){
-    if(backendRole!=='admin')return;
+  async function pp360ReloadStorageQuota(strict=false){
+    if(backendRole!=='admin')return [];
     try{
       const {data,error}=await client().rpc('pp360_my_storage_quota');
       if(error)throw error;
-      if(Array.isArray(data)&&data[0])pp360StorageQuota=data[0];
-    }catch(e){console.warn('Plant quota refresh unavailable:',e?.message||e);}
-    pp360RenderStorageSummary();
+      const rows=Array.isArray(data)?data:[];
+      if(strict&&rows.length!==1)throw new Error('Upload requires exactly one selected plant.');
+      if(rows.length===1)pp360StorageQuota=rows[0];
+      pp360RenderStorageSummary();
+      return rows;
+    }catch(e){
+      if(strict)throw e;
+      console.warn('Plant quota refresh unavailable:',e?.message||e);
+      pp360RenderStorageSummary();
+      return [];
+    }
   }
   window.pp360RequestQuotaIncrease=async function(){
     const plant=pp360StorageQuota.plant_id;
