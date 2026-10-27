@@ -1956,7 +1956,14 @@
   function pp360DocumentIndexAction(d) {
     if(backendRole!=='admin'||!d?.id)return '';
     const id=String(d.id);
-    const index='<button type="button" onclick="openManualIndex(\''+id+'\')" title="Index or add searchable text to this document">Manual Index</button>';
+    // A confirmed searchable document must not offer the ordinary indexing action.
+    // Apply the same state rule to Admin, equipment, Common, and future document tabs.
+    const indexStatus=pp360DocumentIndexStatus(d);
+    const index=indexStatus==='Search ready'
+      ? '<button type="button" disabled title="Already indexed and search ready">Manual Index</button>'
+      : indexStatus==='Indexing…'
+        ? '<button type="button" disabled title="Indexing is already in progress">Manual Index</button>'
+        : '<button type="button" onclick="openManualIndex(\''+id+'\')" title="Index or add searchable text to this document">Manual Index</button>';
     if(!isPdfDocument(d)||d.processing_status!=='ready')return index;
     const count=new Set((Array.isArray(d.metadata?.vision_indexed_pages)?d.metadata.vision_indexed_pages:[])
       .map(Number).filter(n=>Number.isInteger(n)&&n>0)).size;
