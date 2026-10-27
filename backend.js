@@ -3056,7 +3056,7 @@
   window.pp360PreparePlantInvite=async function(){
     const email=document.getElementById('pp360InviteEmail')?.value.trim().toLowerCase()||'';
     const msg=document.getElementById('pp360InviteStatus');
-    if(!/^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/.test(email)){
+    if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){
       if(msg)msg.textContent='Enter a valid email address.';return;
     }
     try{
