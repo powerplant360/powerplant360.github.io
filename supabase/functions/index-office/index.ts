@@ -95,10 +95,12 @@ Deno.serve(async (req) => {
     if (!bytes.length) throw new Error("Stored file is empty.");
 
     let extracted = "";
+    let embeddedImageCount = 0;
     if (ext === "txt" || ext === "csv") {
       extracted = new TextDecoder().decode(bytes);
     } else if (ext === "docx") {
       const zip = await JSZip.loadAsync(bytes);
+      embeddedImageCount = Object.keys(zip.files).filter(n => /^word\/media\/[^/]+\.(?:png|jpe?g|gif|bmp|webp|tiff?)$/i.test(n)).length;
       const parts:string[] = [];
       const names = Object.keys(zip.files).filter(n =>
         n === "word/document.xml" ||
@@ -131,7 +133,12 @@ Deno.serve(async (req) => {
       .replace(/[ \t]+\n/g,"\n")
       .replace(/\n{4,}/g,"\n\n\n")
       .trim();
-    if (!extracted) throw new Error("No searchable text could be extracted from this file.");
+    if (!extracted) {
+      if (ext === "docx" && embeddedImageCount > 0) {
+        throw new Error(`This Word file has no selectable text and contains ${embeddedImageCount} embedded image(s). The original is saved, but curves/screenshots need OCR before they can be searched. Use Manual Index to add verified text, or create a searchable PDF and use Vision Index with approval.`);
+      }
+      throw new Error("No searchable text could be extracted from this file. The original remains saved. Use Manual Index to add verified source text.");
+    }
 
     const indexedText = `[[PAGE 1]]\n${extracted}`;
     const {error:updateError} = await admin.from("documents").update({
