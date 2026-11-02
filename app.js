@@ -394,65 +394,69 @@ function show(x){
 }
 
 
-// Curated general interview guidance; never represents plant-specific settings.
-const interviewTopics={
- 'Boiler':[
- ['unstable CFBC furnace draft','Compare draft transmitters and trends; check ID fan availability, speed, damper feedback and current, PA/SA flows, fuel-feed changes, bed differential pressure and cyclone/loop-seal indications. Follow the approved abnormal-operation procedure and protect furnace pressure limits.'],
- ['rising boiler heat losses','Compare performance at similar load and fuel quality. Review flue-gas temperature, oxygen, CO where measured, unburnt carbon, air leakage, excess air and fouling; validate instruments before tuning combustion.'],
- ['repeated boiler tube failures','Locate failures and review thickness maps, erosion patterns, material, weld quality, chemistry and operating history. Arrange approved inspection and repairs; verify the cause and effectiveness before return to service.']
- ],
- 'Turbine':[
- ['deteriorating condenser vacuum','Check absolute exhaust pressure against load and ambient conditions, cooling availability, air ingress, ejector or vacuum-pump performance, gland sealing and condensate levels. Follow OEM backpressure limits and approved load-reduction or shutdown criteria.'],
- ['increasing turbine vibration','Review vibration trends, axial position, bearing temperatures, oil pressure and temperature, differential expansion and recent load changes. Follow OEM response criteria; do not bypass trips or continue beyond approved limits.'],
- ['worsening turbine heat rate','Validate steam flow, pressure, temperature, feedwater enthalpy and electrical output on a consistent basis. Compare at similar load and backpressure; investigate valve losses, steam leakage and condenser performance.']
- ],
- 'Electrical':[
- ['a critical motor protection trip','Identify the first-out relay indication and event sequence. Check supply, loading and equipment condition through authorized personnel; isolate under permit and lockout procedures for testing. Restart only after the cause is cleared and approval obtained.'],
- ['high auxiliary power consumption','Use metered feeder energy and generation over the same period. Compare at equivalent load; prioritize high consumers, inefficient throttling and unnecessary running equipment while retaining required standby redundancy.'],
- ['repeated transformer overheating','Compare load, ambient and temperature trends; check cooling fans/pumps, alarms and oil condition through authorized staff. Apply approved loading limits and arrange diagnostic tests and corrective maintenance.']
- ],
- 'C&I':[
- ['an unreliable critical process signal','Compare redundant channels, historian trends and independent indications. Inspect transmitter diagnostics, impulse lines, wiring and calibration under an approved permit; maintain protection availability and use formal approval for any temporary override.'],
- ['an oscillating control loop','Validate the measurement and review setpoint, process value and output together. Check valve stiction, actuator feedback, process disturbances and interactions before authorized tuning; document and monitor the change.'],
- ['recurring nuisance trips','Review sequence-of-events records and cause-and-effect logic. Distinguish genuine process excursions from sensor or wiring failures; test the correction through approved change control without weakening protection.']
- ],
- 'CHP/AHS':[
- ['a coal conveyor trip','Check first-out alarms, pull cords, belt misalignment, zero-speed and chute levels. Stop upstream feed as required by the approved sequence; isolate before inspection and clear the cause before an authorized restart.'],
- ['frequent ash conveying blockages','Review hopper levels, ash temperature, conveying pressure, air quality, valve sequence and line condition. Isolate, depressurize and verify zero energy before opening equipment; correct the cause and monitor conveying cycles.'],
- ['coal-handling fire and dust risk','Inspect dust extraction/suppression, spillage, hot bearings and stockpile heating. Apply the approved fire response, isolation and housekeeping procedures; verify fire detection, emergency access and trained response coverage.']
- ],
- 'WTP/ETP':[
- ['high DM-water conductivity','Confirm the reading with a verified sample and check sampling contamination. Review resin exhaustion, regeneration, valve leakage and feed quality; segregate off-spec water and restore quality under approved chemistry procedures.'],
- ['declining RO performance','Trend normalized flow, salt rejection and differential pressure with feed temperature and quality. Check pretreatment, dosing and fouling; use OEM cleaning criteria and approved chemical handling procedures.'],
- ['an effluent quality excursion','Verify sampling and analysis, identify the incoming source and review flow, pH, dosing and treatment performance. Contain or divert to approved holding capacity; follow site reporting and discharge requirements before release.']
- ]
-};
-const interviewRoleGuidance={
- 'Plant Head':['As Plant Head, how would you govern the response to','Set safety and environmental priorities, assign accountable operations and maintenance leads, agree escalation and recovery criteria, and review production impact, resources and recurrence-prevention actions.'],
- 'Operations Manager':['As Operations Manager, how would you organize recovery from','Coordinate operations, maintenance and chemistry as applicable; assess load restrictions and equipment redundancy, approve a recovery plan within delegated authority, and verify sustained performance after corrective action.'],
- 'Shift Incharge':['As Shift Incharge, how would you lead your shift through','Confirm alarms and first-out events, allocate field checks safely, maintain communication with the control room, follow approved load or shutdown criteria, escalate promptly and record a clear shift handover.'],
- 'Engineer':['As Engineer, how would you diagnose and resolve','Validate measurements, compare trends and equipment condition, identify the root cause, propose an approved corrective action and verify the result with documented evidence.'],
- 'Operator':['As Operator, what initial checks and reporting would you perform for','Recognize the abnormal indication, cross-check available local readings safely, inform the Shift Incharge, follow the approved operating procedure and record observations. Do not bypass protection or attempt unauthorized intervention.']
-};
-const interviewState={role:'Plant Head',department:'Boiler',index:0,drafts:{}};
-function interviewKey(){return [interviewState.role,interviewState.department,interviewState.index].join('|');}
+// AI interview sessions live only in memory, scoped to the signed-in owner.
+const interviewDepartments=['Operation','Mechanical','Electrical','C&I'];
+const interviewRoles=['Plant Head','Operations Manager','Shift Incharge','Engineer','Operator'];
+const interviewState={role:'Plant Head',department:'Operation',sessions:{},userId:null};
+function interviewSession(){
+ const userId=window.pp360SearchUserId||null;
+ if(userId!==interviewState.userId){interviewState.sessions={};interviewState.userId=userId;}
+ const key=interviewState.role+'|'+interviewState.department;
+ return interviewState.sessions[key]||(interviewState.sessions[key]={questions:[],index:0,loading:false,error:''});
+}
+async function generateInterviewQuestions(){
+ if(!pp360CanUseMockInterview())return;
+ const st=interviewState,session=interviewSession();
+ if(session.loading)return;
+ const role=st.role,department=st.department,userId=st.userId;
+ session.loading=true;session.error='';renderMockInterview();
+ try{
+   const cfg=window.PP360_CONFIG||{},client=window.pp360Supabase;
+   if(!client||!cfg.supabaseUrl)throw new Error('Interview service is loading. Please try again.');
+   const {data,error}=await client.auth.getSession();
+   if(error||!data?.session?.access_token)throw new Error('Session expired. Please sign in again.');
+   const response=await fetch(cfg.supabaseUrl.replace(/\/$/,'')+'/functions/v1/mock-interview',{
+     method:'POST',signal:AbortSignal.timeout(75000),headers:{'Content-Type':'application/json',Authorization:'Bearer '+data.session.access_token,apikey:cfg.supabaseKey},
+     body:JSON.stringify({department,designation:role,previous_questions:session.questions.slice(-30).map(q=>q.question)})
+   });
+   const payload=await response.json();
+   if(!response.ok)throw new Error(payload.error||'Could not generate interview questions.');
+   if(payload.department!==department||payload.designation!==role||!Array.isArray(payload.questions))throw new Error('Unexpected interview response. Please retry.');
+   const seen=new Set(session.questions.map(q=>norm(q.question)));
+   const fresh=payload.questions.filter(q=>q&&typeof q.question==='string'&&q.question.trim()&&Array.isArray(q.answer)&&q.answer.every(a=>typeof a==='string')&&typeof q.focus==='string').filter(q=>{const k=norm(q.question);if(seen.has(k))return false;seen.add(k);return true;});
+   if(!fresh.length)throw new Error('No new questions returned. Please retry.');
+   const nextIndex=session.questions.length;
+   session.questions.push(...fresh.map(q=>({...q,draft:'',answerOpen:false})));
+   session.index=nextIndex;
+ }catch(error){session.error=(error?.name==='TimeoutError'?'AI took too long. Please retry.':String(error?.message||'Could not generate questions.')).replace(/sk-[A-Za-z0-9_-]+/g,'[hidden]').slice(0,300);}
+ finally{
+   session.loading=false;
+   // Never replace another view, account or selector's current question after an async response.
+   if(pp360CanUseMockInterview()&&window.pp360SearchUserId===userId&&st.role===role&&st.department===department&&document.getElementById('mockInterviewPanel'))renderMockInterview();
+ }
+}
 function renderMockInterview(){
  if(!pp360CanUseMockInterview())return;
- const st=interviewState,topics=interviewTopics[st.department],topic=topics[st.index],level=interviewRoleGuidance[st.role];
- const v=document.getElementById('view');
- v.innerHTML=`<section class="card"><h2>Mock Interview</h2>
- <div class="actions"><label>Designation <select id="interviewRole">${Object.keys(interviewRoleGuidance).map(r=>`<option ${r===st.role?'selected':''}>${esc(r)}</option>`).join('')}</select></label>
- <label>Department <select id="interviewDepartment">${Object.keys(interviewTopics).map(d=>`<option ${d===st.department?'selected':''}>${esc(d)}</option>`).join('')}</select></label></div>
- <p class="muted" role="status">Question ${st.index+1} of ${topics.length} · ${esc(st.role)} · ${esc(st.department)}</p>
- <p><b>Q:</b> ${esc(level[0])} ${esc(topic[0])}?</p>
- <label for="interviewDraft">Your practice answer</label><textarea id="interviewDraft" style="width:100%;min-height:130px;box-sizing:border-box" placeholder="Type your answer...">${esc(st.drafts[interviewKey()]||'')}</textarea>
- <details><summary>Show model answer</summary><p>${esc(topic[1])}</p><p><b>${esc(st.role)} focus:</b> ${esc(level[1])}</p><p class="muted">General interview guidance. Verify all plant limits and actions against approved OEM documents and site SOPs.</p></details>
- <div class="actions"><button type="button" id="interviewPrevious" ${st.index===0?'disabled':''}>Previous</button><button type="button" id="interviewNext" ${st.index===topics.length-1?'disabled':''}>Next</button></div></section>`;
- document.getElementById('interviewDraft').oninput=e=>{st.drafts[interviewKey()]=e.target.value;};
- document.getElementById('interviewRole').onchange=e=>{st.role=e.target.value;st.index=0;renderMockInterview();};
- document.getElementById('interviewDepartment').onchange=e=>{st.department=e.target.value;st.index=0;renderMockInterview();};
- document.getElementById('interviewPrevious').onclick=()=>{if(st.index>0){st.index--;renderMockInterview();}};
- document.getElementById('interviewNext').onclick=()=>{if(st.index<topics.length-1){st.index++;renderMockInterview();}};
+ const st=interviewState,session=interviewSession(),q=session.questions[session.index];
+ document.getElementById('view').innerHTML=`<section class="card" id="mockInterviewPanel" aria-busy="${session.loading}"><h2>Mock Interview</h2>
+ <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px"><label>Designation<select id="interviewRole" style="display:block;width:100%;margin-top:6px">${interviewRoles.map(r=>`<option ${r===st.role?'selected':''}>${esc(r)}</option>`).join('')}</select></label>
+ <label>Department<select id="interviewDepartment" style="display:block;width:100%;margin-top:6px">${interviewDepartments.map(d=>`<option ${d===st.department?'selected':''}>${esc(d)}</option>`).join('')}</select></label></div>
+ <p class="muted">AI questions and model answers tailored to ${esc(st.role)} · ${esc(st.department)}. Generate fresh questions as you continue; no fixed question-bank limit.</p>
+ ${q?`<p role="status">Question ${session.index+1} · ${session.questions.length} generated so far</p><p><b>Q:</b> ${esc(q.question)}</p>
+ <label for="interviewDraft">Your practice answer</label><textarea id="interviewDraft" style="width:100%;min-height:130px;box-sizing:border-box" placeholder="Type your answer...">${esc(q.draft)}</textarea>
+ <details id="interviewModelAnswer" ${q.answerOpen?'open':''}><summary>Show model answer</summary><ol>${q.answer.map(a=>`<li>${esc(a)}</li>`).join('')}</ol><p><b>Interviewer focus:</b> ${esc(q.focus)}</p></details>`:'<p>Select your designation and department, then start your AI interview.</p>'}
+ <p role="status" aria-live="polite">${session.loading?'Generating new questions and answers…':''}</p>
+ ${session.error?`<p role="alert" class="notice">${esc(session.error)}</p>`:''}
+ <div class="actions">${q?`<button type="button" id="interviewPrevious" ${session.index===0||session.loading?'disabled':''}>Previous</button><button type="button" id="interviewNext" ${session.loading?'disabled':''}>${session.error&&session.index===session.questions.length-1?'Retry Next':'Next'}</button>`:`<button type="button" class="primary" id="interviewStart" ${session.loading?'disabled':''}>${session.error?'Retry AI Interview':'Start AI Interview'}</button>`}</div>
+ <p class="muted small">AI-generated general practice. Verify plant-specific limits against approved OEM documents and site SOPs. New batches use API credits; revisiting generated questions does not.</p></section>`;
+ document.getElementById('interviewRole').onchange=e=>{st.role=e.target.value;renderMockInterview();};
+ document.getElementById('interviewDepartment').onchange=e=>{st.department=e.target.value;renderMockInterview();};
+ if(q){
+   document.getElementById('interviewDraft').oninput=e=>{q.draft=e.target.value;};
+   document.getElementById('interviewModelAnswer').ontoggle=e=>{q.answerOpen=e.target.open;};
+   document.getElementById('interviewPrevious').onclick=()=>{if(!session.loading&&session.index>0){session.index--;session.error='';renderMockInterview();}};
+   document.getElementById('interviewNext').onclick=()=>{if(session.loading)return;if(session.index<session.questions.length-1){session.index++;session.error='';renderMockInterview();}else void generateInterviewQuestions();};
+ }else document.getElementById('interviewStart').onclick=()=>void generateInterviewQuestions();
 }
 
 function equipmentPage(e){
