@@ -352,6 +352,9 @@
   function applySearchRoleUi() {
     window.pp360BackendRole = backendRole;
     window.pp360SignedIn = Boolean(backendSession);
+    // UI-level gating only: verified owner email and Admin role are both required.
+    window.pp360MockInterviewOwner = backendRole === 'admin' &&
+      String(backendSession?.user?.email || '').trim().toLowerCase() === 'raghuvarma06@gmail.com';
     window.pp360SearchUserId = backendSession?.user?.id || null;
     window.pp360SetHistoryUser?.(backendSession?.user?.id || null);
     window.pp360RenderPlantIdentity?.();
