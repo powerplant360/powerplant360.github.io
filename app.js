@@ -306,9 +306,13 @@ function renderSearchHistory(){
 }
 
 
+function pp360CanUseMockInterview(){
+ // This page is reserved for the verified owner account, not all Admins.
+ return window.pp360SignedIn===true && window.pp360MockInterviewOwner===true;
+}
 function renderTabs(active='Home'){
  const canSeeAdmin=window.pp360SignedIn===true && admin;
- const visibleTabs=tabs.filter(x=>x!=='Admin'||canSeeAdmin);
+ const visibleTabs=tabs.filter(x=>(x!=='Admin'||canSeeAdmin) && (x!=='Mock Interview'||pp360CanUseMockInterview()));
  if(!visibleTabs.includes(active)) active='Home';
  document.getElementById('tabs').innerHTML=visibleTabs.map(x=>`<button type='button' class='${x===active?'active':''}' ${x===active?'aria-current="page"':''} onclick="show('${x}')">${x}</button>`).join('');
 }
@@ -335,6 +339,7 @@ function pp360RestoreAfterAuth(){
    const role=window.pp360BackendRole;
    if(!window.pp360SignedIn || !role) return;
    if(saved.tab==='Admin' && role!=='admin') return;
+   if(saved.tab==='Mock Interview' && !pp360CanUseMockInterview()) return;
    if(typeof saved.equipment==='string' && equipment.includes(saved.equipment)){
      equipmentPage(saved.equipment);
    } else if(pp360AllowedViews.includes(saved.tab)){
@@ -364,6 +369,7 @@ document.addEventListener('click',event=>{
 function show(x){
  closePP360Nav(false);
  if(x==='Admin' && !(window.pp360SignedIn===true && admin)) x='Home';
+ if(x==='Mock Interview' && !pp360CanUseMockInterview()) x='Home';
  renderTabs(x);
  const v=document.getElementById('view');
  if(x==='Home'){
